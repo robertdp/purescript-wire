@@ -3,7 +3,7 @@ module Wire.Signal where
 import Prelude
 import Data.Array (deleteBy, snoc)
 import Data.Foldable (traverse_)
-import Data.Profunctor (class Profunctor)
+import Data.Profunctor (class Profunctor, rmap)
 import Effect (Effect)
 import Effect.Ref as Ref
 import Unsafe.Coerce (unsafeCoerce)
@@ -51,15 +51,10 @@ create init = ado
 instance profunctorSignal :: Profunctor Signal where
   dimap f g (Signal s) =
     Signal
-      { read: g <$> s.read
+      { read: map g s.read
       , subscribe: \k -> s.subscribe (k <<< g)
       , write: s.write <<< f
       }
 
 instance functorSignal :: Functor (Signal i) where
-  map f (Signal s) =
-    Signal
-      { read: f <$> s.read
-      , subscribe: \k -> s.subscribe (k <<< f)
-      , write: s.write
-      }
+  map = rmap
