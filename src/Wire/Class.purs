@@ -10,3 +10,8 @@ class
 class
   Monad m <= Writable (signal :: Type -> Type -> Type) m where
   write :: forall i o. signal i o -> i -> m Unit
+
+subscribe' :: forall signal m o. Readable signal m => signal o -> (o -> m Unit) -> m (m Unit)
+subscribe' s k = do
+  _ <- read s >>= k
+  subscribe s k
