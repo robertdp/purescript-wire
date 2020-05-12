@@ -21,8 +21,8 @@ import Wire.Signal.Class (class Readable, class Writable, immediately, modify, r
 newtype Signal i o
   = Signal
   { read :: Effect o
-  , subscribe :: (o -> Effect Unit) -> Effect (Effect Unit)
   , write :: i -> Effect Unit
+  , subscribe :: (o -> Effect Unit) -> Effect (Effect Unit)
   }
 
 type Signal' a
@@ -35,6 +35,10 @@ create init = ado
   let
     read = Ref.read value
 
+    write a = do
+      Ref.write a value
+      Ref.read subscribers >>= traverse_ \k -> k a
+
     subscribe k = do
       unsubscribing <- Ref.new false
       let
@@ -43,10 +47,6 @@ create init = ado
       pure do
         Ref.write true unsubscribing
         Ref.modify_ (deleteBy unsafeRefEq subscriber) subscribers
-
-    write a = do
-      Ref.write a value
-      Ref.read subscribers >>= traverse_ \k -> k a
   in Signal { read, write, subscribe }
 
 readOnly :: forall i o. Signal i o -> Signal Void o
@@ -63,6 +63,19 @@ distinct (Signal s) = Signal s { subscribe = subscribe }
         Ref.write (pure a) lastRef
         k a
 
+filter :: forall a. (a -> Boolean) -> Signal a a -> Signal a a
+filter predicate = lfilter predicate <<< rfilter predicate
+
+lfilter :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
+lfilter predicate (Signal s) = Signal s { write = write }
+  where
+  write a = when (predicate a) do s.write a
+
+rfilter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
+rfilter predicate (Signal s) = Signal s { subscribe = subscribe }
+  where
+  subscribe k = s.subscribe \a -> when (predicate a) do k a
+
 instance readableSignal :: Exports.Readable Signal Effect where
   read (Signal s) = s.read
   subscribe (Signal s) = s.subscribe
@@ -74,8 +87,8 @@ instance profunctorSignal :: Profunctor Signal where
   dimap f g (Signal s) =
     Signal
       { read: map g s.read
-      , subscribe: \k -> s.subscribe (k <<< g)
       , write: s.write <<< f
+      , subscribe: \k -> s.subscribe (k <<< g)
       }
 
 instance functorSignal :: Functor (Signal i) where
