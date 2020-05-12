@@ -6,12 +6,14 @@ module Wire.Signal
   , filter
   , readOnly
   , restrict
+  , split
+  , traversed
   , module Exports
   ) where
 
 import Prelude
 import Data.Array (deleteBy, snoc)
-import Data.Bitraversable (class Bitraversable, bitraverse, ltraverse)
+import Data.Bitraversable (class Bitraversable, bitraverse)
 import Data.Foldable (class Foldable, traverse_)
 import Data.Maybe (Maybe(..))
 import Data.Profunctor (class Profunctor, rmap)
@@ -76,11 +78,8 @@ filter predicate (Signal s) = Signal s { subscribe = subscribe }
   where
   subscribe k = s.subscribe \a -> when (predicate a) do k a
 
-traversable :: forall i o f. Foldable f => Signal i o -> Signal (f i) o
-traversable (Signal s) = Signal s { write = traverse_ s.write }
-
-ltraversable :: forall i o a f. Bitraversable f => Signal i o -> Signal (f i a) o
-ltraversable (Signal s) = Signal s { write = void <<< ltraverse s.write }
+traversed :: forall i o f. Foldable f => Signal i o -> Signal (f i) o
+traversed (Signal s) = Signal s { write = traverse_ s.write }
 
 split :: forall i o f. Bitraversable f => Signal i o -> Signal (f i i) o
 split (Signal s) = Signal s { write = void <<< bitraverse s.write s.write }
