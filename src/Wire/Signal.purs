@@ -11,8 +11,7 @@ module Wire.Signal
 
 import Prelude
 import Data.Array (deleteBy, snoc)
-import Data.Bitraversable (class Bitraversable, bisequence, bitraverse, ltraverse)
-import Data.Either (Either, either)
+import Data.Bitraversable (class Bitraversable, bitraverse, ltraverse)
 import Data.Foldable (class Foldable, traverse_)
 import Data.Maybe (Maybe(..))
 import Data.Profunctor (class Profunctor, rmap)
@@ -85,15 +84,6 @@ ltraversable (Signal s) = Signal s { write = void <<< ltraverse s.write }
 
 split :: forall i o f. Bitraversable f => Signal i o -> Signal (f i i) o
 split (Signal s) = Signal s { write = void <<< bitraverse s.write s.write }
-
-restrictJust :: forall i o. Signal i o -> Signal (Maybe i) o
-restrictJust = traversable
-
-restrictRight :: forall i o a. Signal i o -> Signal (Either a i) o
-restrictRight = traversable
-
-restrictLeft :: forall i o a. Signal i o -> Signal (Either i a) o
-restrictLeft = ltraversable
 
 instance readableSignal :: Exports.Readable Signal Effect where
   read (Signal s) = s.read
