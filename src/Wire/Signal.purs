@@ -44,7 +44,7 @@ create init = ado
     subscribe k = do
       unsubscribing <- Ref.new false
       let
-        subscriber = \a -> unlessM (Ref.read unsubscribing) (k a)
+        subscriber = \a -> unlessM (Ref.read unsubscribing) do k a
       Ref.modify_ (flip snoc subscriber) subscribers
       pure do
         Ref.write true unsubscribing
@@ -83,12 +83,13 @@ instance writableSignal :: Exports.Writable Signal Effect where
   write a (Signal s) = s.write a
 
 instance profunctorSignal :: Profunctor Signal where
-  dimap f g (Signal s) =
-    Signal
-      { read: map g s.read
-      , write: s.write <<< f
-      , subscribe: \k -> s.subscribe (k <<< g)
-      }
+  dimap f g (Signal s) = Signal { read, write, subscribe }
+    where
+    read = map g s.read
+
+    write a = s.write (f a)
+
+    subscribe k = s.subscribe \a -> k (g a)
 
 instance functorSignal :: Functor (Signal i) where
   map = rmap
