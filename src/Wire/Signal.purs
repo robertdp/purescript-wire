@@ -28,7 +28,7 @@ newtype Signal i o
 type Signal' a
   = Signal a a
 
-create :: forall a. a -> Effect (Signal a a)
+create :: forall a. a -> Effect (Signal' a)
 create init = ado
   value <- Ref.new init
   subscribers <- Ref.new []
@@ -63,16 +63,16 @@ distinct (Signal s) = Signal s { subscribe = subscribe }
         Ref.write (pure a) lastRef
         k a
 
-filter :: forall a. (a -> Boolean) -> Signal a a -> Signal a a
-filter predicate = lfilter predicate <<< rfilter predicate
+filter :: forall a. (a -> Boolean) -> Signal' a -> Signal' a
+filter predicate = ifilter predicate <<< ofilter predicate
 
-lfilter :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
-lfilter predicate (Signal s) = Signal s { write = write }
+ifilter :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
+ifilter predicate (Signal s) = Signal s { write = write }
   where
   write a = when (predicate a) do s.write a
 
-rfilter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
-rfilter predicate (Signal s) = Signal s { subscribe = subscribe }
+ofilter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
+ofilter predicate (Signal s) = Signal s { subscribe = subscribe }
   where
   subscribe k = s.subscribe \a -> when (predicate a) do k a
 
