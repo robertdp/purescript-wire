@@ -15,3 +15,6 @@ immediately :: forall signal m i o. Readable signal m => signal i o -> (o -> m U
 immediately s k = do
   _ <- read s >>= k
   subscribe s k
+
+modify :: forall i signal o m. Readable signal m => Writable signal m => signal i o -> (o -> i) -> m Unit
+modify s f = read s >>= f >>> write s
