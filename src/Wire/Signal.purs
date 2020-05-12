@@ -14,7 +14,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Unsafe.Coerce (unsafeCoerce)
 import Unsafe.Reference (unsafeRefEq)
-import Wire.Signal.Class (class Readable, class Writable, read, subscribe, immediately, write) as Exports
+import Wire.Signal.Class (class Readable, class Writable, immediately, modify, read, subscribe, write) as Exports
 
 newtype Signal i o
   = Signal
