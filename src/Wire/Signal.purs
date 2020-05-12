@@ -3,7 +3,9 @@ module Wire.Signal
   , Signal'
   , create
   , distinct
+  , filter
   , readOnly
+  , restrict
   , module Exports
   ) where
 
@@ -63,16 +65,13 @@ distinct (Signal s) = Signal s { subscribe = subscribe }
         Ref.write (pure a) lastRef
         k a
 
-filter :: forall a. (a -> Boolean) -> Signal' a -> Signal' a
-filter predicate = ifilter predicate <<< ofilter predicate
-
-ifilter :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
-ifilter predicate (Signal s) = Signal s { write = write }
+restrict :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
+restrict predicate (Signal s) = Signal s { write = write }
   where
   write a = when (predicate a) do s.write a
 
-ofilter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
-ofilter predicate (Signal s) = Signal s { subscribe = subscribe }
+filter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
+filter predicate (Signal s) = Signal s { subscribe = subscribe }
   where
   subscribe k = s.subscribe \a -> when (predicate a) do k a
 
