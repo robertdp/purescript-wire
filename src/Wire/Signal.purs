@@ -78,7 +78,7 @@ rfilter predicate (Signal s) = Signal s { subscribe = subscribe }
 
 instance readableSignal :: Exports.Readable Signal Effect where
   read (Signal s) = s.read
-  subscribe (Signal s) = s.subscribe
+  subscribe k (Signal s) = s.subscribe k
 
 instance writableSignal :: Exports.Writable Signal Effect where
   write a (Signal s) = s.write a
