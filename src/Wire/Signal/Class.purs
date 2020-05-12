@@ -11,7 +11,7 @@ class
   Monad m <= Writable signal m | signal -> m where
   write :: forall i o. signal i o -> i -> m Unit
 
-subscribe' :: forall signal m i o. Readable signal m => signal i o -> (o -> m Unit) -> m (m Unit)
-subscribe' s k = do
+immediately :: forall signal m i o. Readable signal m => signal i o -> (o -> m Unit) -> m (m Unit)
+immediately s k = do
   _ <- read s >>= k
   subscribe s k
