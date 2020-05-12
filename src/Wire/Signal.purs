@@ -1,6 +1,8 @@
 module Wire.Signal
   ( Signal(..)
+  , Signal'
   , create
+  , distinct
   , readOnly
   , module Exports
   ) where
@@ -22,6 +24,9 @@ newtype Signal i o
   , subscribe :: (o -> Effect Unit) -> Effect (Effect Unit)
   , write :: i -> Effect Unit
   }
+
+type Signal' a
+  = Signal a a
 
 create :: forall a. a -> Effect (Signal a a)
 create init = ado
