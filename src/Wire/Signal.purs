@@ -47,11 +47,11 @@ create init = ado
 readOnly :: forall i o. Signal i o -> Signal Void o
 readOnly = unsafeCoerce
 
-instance readableSignal :: Readable (Signal i) Effect where
+instance readableSignal :: Readable Signal Effect where
   read (Signal s) = s.read
   subscribe (Signal s) = s.subscribe
 
-instance writableSignal :: Writable (Signal) Effect where
+instance writableSignal :: Writable Signal Effect where
   write (Signal s) = s.write
 
 instance profunctorSignal :: Profunctor Signal where
