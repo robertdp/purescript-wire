@@ -1,4 +1,4 @@
-module Wire.Class where
+module Wire.Signal.Class where
 
 import Prelude
 

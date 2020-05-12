@@ -1,4 +1,9 @@
-module Wire.Signal where
+module Wire.Signal
+  ( Signal(..)
+  , create
+  , readOnly
+  , module Exports
+  ) where
 
 import Prelude
 import Data.Array (deleteBy, snoc)
@@ -8,7 +13,8 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Unsafe.Coerce (unsafeCoerce)
 import Unsafe.Reference (unsafeRefEq)
-import Wire.Class (class Readable, class Writable)
+import Wire.Signal.Class (class Readable, class Writable)
+import Wire.Signal.Class (class Readable, class Writable, read, subscribe, subscribe', write) as Exports
 
 newtype Signal i o
   = Signal
@@ -16,16 +22,6 @@ newtype Signal i o
   , subscribe :: (o -> Effect Unit) -> Effect (Effect Unit)
   , write :: i -> Effect Unit
   }
-
-readOnly :: forall i o. Signal i o -> Signal Void o
-readOnly = unsafeCoerce
-
-instance readableSignal :: Readable (Signal i) Effect where
-  read (Signal s) = s.read
-  subscribe (Signal s) = s.subscribe
-
-instance writableSignal :: Writable (Signal) Effect where
-  write (Signal s) = s.write
 
 create :: forall a. a -> Effect (Signal a a)
 create init = ado
@@ -47,6 +43,16 @@ create init = ado
       Ref.write a value
       Ref.read subscribers >>= traverse_ \k -> k a
   in Signal { read, write, subscribe }
+
+readOnly :: forall i o. Signal i o -> Signal Void o
+readOnly = unsafeCoerce
+
+instance readableSignal :: Readable (Signal i) Effect where
+  read (Signal s) = s.read
+  subscribe (Signal s) = s.subscribe
+
+instance writableSignal :: Writable (Signal) Effect where
+  write (Signal s) = s.write
 
 instance profunctorSignal :: Profunctor Signal where
   dimap f g (Signal s) =
