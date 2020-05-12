@@ -63,7 +63,7 @@ instance readableSignal :: Exports.Readable Signal Effect where
   subscribe (Signal s) = s.subscribe
 
 instance writableSignal :: Exports.Writable Signal Effect where
-  write (Signal s) = s.write
+  write a (Signal s) = s.write a
 
 instance profunctorSignal :: Profunctor Signal where
   dimap f g (Signal s) =
