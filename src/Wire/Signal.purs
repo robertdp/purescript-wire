@@ -8,12 +8,12 @@ module Wire.Signal
 import Prelude
 import Data.Array (deleteBy, snoc)
 import Data.Foldable (traverse_)
+import Data.Maybe (Maybe(..))
 import Data.Profunctor (class Profunctor, rmap)
 import Effect (Effect)
 import Effect.Ref as Ref
 import Unsafe.Coerce (unsafeCoerce)
 import Unsafe.Reference (unsafeRefEq)
-import Wire.Signal.Class (class Readable, class Writable)
 import Wire.Signal.Class (class Readable, class Writable, read, subscribe, immediately, write) as Exports
 
 newtype Signal i o
@@ -47,11 +47,22 @@ create init = ado
 readOnly :: forall i o. Signal i o -> Signal Void o
 readOnly = unsafeCoerce
 
-instance readableSignal :: Readable Signal Effect where
+distinct :: forall i o. Eq o => Signal i o -> Signal i o
+distinct (Signal s) = Signal s { subscribe = subscribe }
+  where
+  subscribe k = do
+    lastRef <- Ref.new Nothing
+    s.subscribe \a -> do
+      last <- Ref.read lastRef
+      when (pure a /= last) do
+        Ref.write (pure a) lastRef
+        k a
+
+instance readableSignal :: Exports.Readable Signal Effect where
   read (Signal s) = s.read
   subscribe (Signal s) = s.subscribe
 
-instance writableSignal :: Writable Signal Effect where
+instance writableSignal :: Exports.Writable Signal Effect where
   write (Signal s) = s.write
 
 instance profunctorSignal :: Profunctor Signal where
