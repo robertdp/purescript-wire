@@ -1,104 +1,195 @@
-module Wire.Signal
-  ( Signal(..)
-  , Signal'
-  , create
-  , distinct
-  , filter
-  , readOnly
-  , restrict
-  , split
-  , traversed
-  , module Exports
-  ) where
+module Wire.Signal where
 
-import Prelude
-import Data.Array (deleteBy, snoc)
-import Data.Bitraversable (class Bitraversable, bitraverse)
-import Data.Foldable (class Foldable, traverse_)
-import Data.Maybe (Maybe(..))
-import Data.Profunctor (class Profunctor, rmap)
-import Effect (Effect)
-import Effect.Ref as Ref
-import Unsafe.Coerce (unsafeCoerce)
-import Unsafe.Reference (unsafeRefEq)
-import Wire.Signal.Class (class Readable, class Writable, immediately, modify, read, subscribe, write) as Exports
-
-newtype Signal i o
-  = Signal
-  { read :: Effect o
-  , write :: i -> Effect Unit
-  , subscribe :: (o -> Effect Unit) -> Effect (Effect Unit)
-  }
-
-type Signal' a
-  = Signal a a
-
-create :: forall a. a -> Effect (Signal' a)
-create init = ado
-  value <- Ref.new init
-  subscribers <- Ref.new []
-  let
-    read = Ref.read value
-
-    write a = do
-      Ref.write a value
-      Ref.read subscribers >>= traverse_ \k -> k a
-
-    subscribe k = do
-      unsubscribing <- Ref.new false
-      let
-        subscriber = \a -> unlessM (Ref.read unsubscribing) do k a
-      Ref.modify_ (flip snoc subscriber) subscribers
-      pure do
-        Ref.write true unsubscribing
-        Ref.modify_ (deleteBy unsafeRefEq subscriber) subscribers
-  in Signal { read, write, subscribe }
-
-readOnly :: forall i o. Signal i o -> Signal Void o
-readOnly = unsafeCoerce
-
-distinct :: forall i o. Eq o => Signal i o -> Signal i o
-distinct (Signal s) = Signal s { subscribe = subscribe }
-  where
-  subscribe k = do
-    lastRef <- Ref.new Nothing
-    s.subscribe \a -> do
-      last <- Ref.read lastRef
-      when (pure a /= last) do
-        Ref.write (pure a) lastRef
-        k a
-
-restrict :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
-restrict predicate (Signal s) = Signal s { write = write }
-  where
-  write a = when (predicate a) do s.write a
-
-filter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
-filter predicate (Signal s) = Signal s { subscribe = subscribe }
-  where
-  subscribe k = s.subscribe \a -> when (predicate a) do k a
-
-traversed :: forall i o f. Foldable f => Signal i o -> Signal (f i) o
-traversed (Signal s) = Signal s { write = traverse_ s.write }
-
-split :: forall i o f. Bitraversable f => Signal i o -> Signal (f i i) o
-split (Signal s) = Signal s { write = void <<< bitraverse s.write s.write }
-
-instance readableSignal :: Exports.Readable Signal Effect where
-  read (Signal s) = s.read
-  subscribe k (Signal s) = s.subscribe k
-
-instance writableSignal :: Exports.Writable Signal Effect where
-  write a (Signal s) = s.write a
-
-instance profunctorSignal :: Profunctor Signal where
-  dimap f g (Signal s) = Signal { read, write, subscribe }
-    where
-    read = map g s.read
-
-    write a = s.write (f a)
-
-    subscribe k = s.subscribe \a -> k (g a)
-
-instance functorSignal :: Functor (Signal i) where
-  map = rmap
+--   ( Signal(..)
+--   , Value
+--   , create
+--   , distinct
+--   , filter
+--   , read
+--   , subscribe
+--   , immediately
+--   ) where
+-- import Prelude
+-- import Control.Alt (class Alt, alt)
+-- import Control.Apply (lift2)
+-- import Control.Comonad (class Comonad, class Extend, extract)
+-- import Data.Array (deleteBy, snoc)
+-- import Data.Bifunctor (bimap)
+-- import Data.DateTime.Instant (Instant)
+-- import Data.Either (Either(..), either)
+-- import Data.Foldable (sequence_, traverse_)
+-- import Data.Maybe (Maybe(..))
+-- import Data.Profunctor (class Profunctor, lcmap)
+-- import Data.Profunctor.Choice (class Choice)
+-- import Effect (Effect)
+-- import Effect.Now as Now
+-- import Effect.Ref as Ref
+-- import Unsafe.Coerce (unsafeCoerce)
+-- import Unsafe.Reference (unsafeRefEq)
+-- newtype Signal a
+--   = Signal
+--   { read :: Effect (Value a)
+--   , subscribe :: (Value a -> Effect Unit) -> Effect (Effect Unit)
+--   }
+-- data Value a
+--   = Value a (Maybe Instant)
+-- derive instance functorValue :: Functor Value
+-- instance extendValue :: Extend Value where
+--   extend f v@(Value _ updated) = Value (f v) updated
+-- instance comonadValue :: Comonad Value where
+--   extract (Value a _) = a
+-- instance applyValue :: Apply Value where
+--   apply (Value f ftime) (Value a atime) = Value (f a) (max ftime atime)
+-- instance applicativeValue :: Applicative Value where
+--   pure a = Value a Nothing
+-- instance altValue :: Alt Value where
+--   alt a@(Value _ atime) b@(Value _ btime) = if atime < btime then b else a
+-- create :: forall a. a -> Effect { signal :: Signal a, write :: a -> Effect Unit }
+-- create init = do
+--   now <- Now.now
+--   value <- Ref.new (Value init (pure now))
+--   subscribers <- Ref.new []
+--   let
+--     read' = Ref.read value
+--     subscribe' k = do
+--       unsubscribing <- Ref.new false
+--       let
+--         subscriber = \a -> unlessM (Ref.read unsubscribing) do k a
+--       Ref.modify_ (flip snoc subscriber) subscribers
+--       pure do
+--         Ref.write true unsubscribing
+--         Ref.modify_ (deleteBy unsafeRefEq subscriber) subscribers
+--     write' a = do
+--       now' <- Now.now
+--       let
+--         v = Value a (pure now)
+--       Ref.write v value
+--       Ref.read subscribers >>= traverse_ \k -> k v
+--   pure
+--     { signal:
+--         Signal
+--           { read: read'
+--           , subscribe: subscribe'
+--           }
+--     , write: write'
+--     }
+-- distinct :: forall a. Eq a => Signal a -> Signal a
+-- distinct (Signal s) = Signal s { subscribe = subscribe' }
+--   where
+--   subscribe' k = do
+--     lastRef <- Ref.new Nothing
+--     s.subscribe \v -> do
+--       let
+--         a = extract v
+--       last <- Ref.read lastRef
+--       when (pure a /= last) do
+--         Ref.write (pure a) lastRef
+--         k v
+-- filter :: forall a. (a -> Boolean) -> Signal a -> Signal a
+-- filter predicate (Signal s) = Signal s { subscribe = subscribe' }
+--   where
+--   subscribe' k = s.subscribe \v -> when (predicate (extract v)) do k v
+-- read :: forall a. Signal a -> Effect a
+-- read (Signal s) = extract <$> s.read
+-- subscribe :: forall a. Signal a -> (a -> Effect Unit) -> Effect (Effect Unit)
+-- subscribe (Signal s) k = s.subscribe \v -> k (extract v)
+-- immediately :: forall a. Signal a -> (a -> Effect Unit) -> Effect (Effect Unit)
+-- immediately s k = do
+--   _ <- read s >>= k
+--   subscribe s k
+-- instance functorSignal :: Functor Signal where
+--   map f (Signal s) = Signal { read: read', subscribe: subscribe' }
+--     where
+--     read' = map f <$> s.read
+--     subscribe' k = s.subscribe \a -> k (f <$> a)
+-- instance applySignal :: Apply Signal where
+--   apply (Signal s1) (Signal s2) = Signal { read: read', subscribe: subscribe' }
+--     where
+--     read' = lift2 apply s1.read s2.read
+--     subscribe' k = do
+--       latestF <- Ref.new Nothing
+--       latestA <- Ref.new Nothing
+--       c1 <-
+--         s1.subscribe \f -> do
+--           Ref.write (pure f) latestF
+--           Ref.read latestA >>= traverse_ \a -> k (apply f a)
+--       c2 <-
+--         s2.subscribe \a -> do
+--           Ref.write (pure a) latestA
+--           Ref.read latestF >>= traverse_ \f -> k (apply f a)
+--       pure (c1 *> c2)
+-- instance applicativeSignal :: Applicative Signal where
+--   pure a = Signal { read: pure (pure a), subscribe: \k -> k (pure a) *> mempty }
+-- instance bindSignal :: Bind Signal where
+--   bind (Signal s) f = Signal { read: read', subscribe: subscribe' }
+--     where
+--     read' = do
+--       v <- s.read
+--       case f (extract v) of
+--         Signal x -> x.read
+--     subscribe' k = do
+--       unsubInner <- Ref.new Nothing
+--       unsubOuter <-
+--         s.subscribe \v -> do
+--           Ref.read unsubInner >>= sequence_
+--           case f (extract v) of
+--             Signal x -> do
+--               unsub <- x.subscribe k
+--               Ref.write (pure unsub) unsubInner
+--       pure do
+--         Ref.read unsubInner >>= sequence_
+--         unsubOuter
+-- instance monadSignal :: Monad Signal
+-- instance semigroupSignal :: Semigroup a => Semigroup (Signal a) where
+--   append = lift2 append
+-- instance monoidSignal :: Monoid a => Monoid (Signal a) where
+--   mempty = pure mempty
+-- instance altSignal :: Alt Signal where
+--   alt (Signal s1) (Signal s2) = Signal { read: read', subscribe: subscribe' }
+--     where
+--     read' = lift2 alt s1.read s2.read
+--     subscribe' k = do
+--       c1 <- s1.subscribe k
+--       c2 <- s2.subscribe k
+--       pure (c1 *> c2)
+-- newtype Transition i o
+--   = Transition
+--   { read :: Value i -> Effect (Value o)
+--   , subscribe :: ((i -> Effect Unit) -> Effect (Effect Unit)) -> (o -> Effect Unit) -> Effect (Effect Unit)
+--   }
+-- instance semigroupoidTransition :: Semigroupoid Transition where
+--   compose (Transition g) (Transition f) = Transition { read: g.read <=< f.read, subscribe: g.subscribe <<< f.subscribe }
+-- instance categoryTransition :: Category Transition where
+--   identity = Transition { read: pure, subscribe: identity }
+-- instance profunctorTransition :: Profunctor Transition where
+--   dimap a2b c2d (Transition t) =
+--     Transition
+--       { read: \a -> map c2d <$> t.read (map a2b a)
+--       , subscribe:
+--           \subA -> \kD ->
+--             let
+--               subC = t.subscribe \kB -> subA \a -> kB (a2b a)
+--             in
+--               subC \c -> kD (c2d c)
+--       }
+-- instance choiceTransition :: Choice Transition where
+--   left (Transition t) =
+--     Transition
+--       { read:
+--           \(Value value time) -> case value of
+--             Left a -> do
+--               b <- t.read (Value a time)
+--               pure (Left <$> b)
+--             Right c -> pure (Value (Right c) time)
+--       , subscribe: unsafeCoerce unit
+--       }
+--   right (Transition t) =
+--     Transition
+--       { read:
+--           \(Value value time) -> case value of
+--             Left a -> pure (Value (Left a) time)
+--             Right b -> do
+--               c <- t.read (Value b time)
+--               pure (Right <$> c)
+--       , subscribe: unsafeCoerce unit
+--       }
