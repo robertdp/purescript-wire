@@ -33,8 +33,8 @@ subscribe s k = do
   _ <- sink (source_ \emit -> read s >>= emit *> mempty) k
   sink s k
 
-write :: forall a. a -> Signal a -> Effect Unit
-write a (Signal s) = s.push a
+write :: forall a. Signal a -> a -> Effect Unit
+write (Signal s) = s.push
 
 kill :: forall a. Signal a -> Effect Unit
 kill (Signal s) = s.kill
