@@ -1,104 +1,68 @@
-module Wire.Signal
-  ( Signal(..)
-  , Signal'
-  , create
-  , distinct
-  , filter
-  , readOnly
-  , restrict
-  , split
-  , traversed
-  , module Exports
-  ) where
+module Wire.Signal where
 
 import Prelude
-import Data.Array (deleteBy, snoc)
-import Data.Bitraversable (class Bitraversable, bitraverse)
-import Data.Foldable (class Foldable, traverse_)
-import Data.Maybe (Maybe(..))
-import Data.Profunctor (class Profunctor, rmap)
+import Control.Apply (lift2)
 import Effect (Effect)
 import Effect.Ref as Ref
-import Unsafe.Coerce (unsafeCoerce)
-import Unsafe.Reference (unsafeRefEq)
-import Wire.Signal.Class (class Readable, class Writable, immediately, modify, read, subscribe, write) as Exports
+import Wire.Event (Event, Subscribe)
+import Wire.Event as Event
+import Wire.Event.Class (class EventSource, sink)
 
-newtype Signal i o
+newtype Signal a
   = Signal
-  { read :: Effect o
-  , write :: i -> Effect Unit
-  , subscribe :: (o -> Effect Unit) -> Effect (Effect Unit)
+  { event :: Event a
+  , read :: Effect a
   }
 
-type Signal' a
-  = Signal a a
-
-create :: forall a. a -> Effect (Signal' a)
-create init = ado
+create :: forall a. a -> Effect { signal :: Signal a, write :: a -> Effect Unit }
+create init = do
   value <- Ref.new init
-  subscribers <- Ref.new []
+  inner <- Event.create
   let
-    read = Ref.read value
-
     write a = do
       Ref.write a value
-      Ref.read subscribers >>= traverse_ \k -> k a
+      inner.push a
 
-    subscribe k = do
-      unsubscribing <- Ref.new false
-      let
-        subscriber = \a -> unlessM (Ref.read unsubscribing) do k a
-      Ref.modify_ (flip snoc subscriber) subscribers
-      pure do
-        Ref.write true unsubscribing
-        Ref.modify_ (deleteBy unsafeRefEq subscriber) subscribers
-  in Signal { read, write, subscribe }
+    event =
+      Event.makeEvent \emit -> do
+        _ <- Ref.read value >>= emit
+        Event.subscribe inner.event emit
 
-readOnly :: forall i o. Signal i o -> Signal Void o
-readOnly = unsafeCoerce
+    signal = Signal { event, read: Ref.read value }
+  pure { signal, write }
 
-distinct :: forall i o. Eq o => Signal i o -> Signal i o
-distinct (Signal s) = Signal s { subscribe = subscribe }
-  where
-  subscribe k = do
-    lastRef <- Ref.new Nothing
-    s.subscribe \a -> do
-      last <- Ref.read lastRef
-      when (pure a /= last) do
-        Ref.write (pure a) lastRef
-        k a
+read :: forall a. Signal a -> Effect a
+read (Signal s) = s.read
 
-restrict :: forall i o. (i -> Boolean) -> Signal i o -> Signal i o
-restrict predicate (Signal s) = Signal s { write = write }
-  where
-  write a = when (predicate a) do s.write a
+subscribe :: forall a. Signal a -> Subscribe a
+subscribe = sink
 
-filter :: forall i o. (o -> Boolean) -> Signal i o -> Signal i o
-filter predicate (Signal s) = Signal s { subscribe = subscribe }
-  where
-  subscribe k = s.subscribe \a -> when (predicate a) do k a
+derive instance functorSignal :: Functor Signal
 
-traversed :: forall i o f. Foldable f => Signal i o -> Signal (f i) o
-traversed (Signal s) = Signal s { write = traverse_ s.write }
+instance applySignal :: Apply Signal where
+  apply (Signal f) (Signal a) =
+    Signal
+      { event: apply f.event a.event
+      , read: apply f.read a.read
+      }
 
-split :: forall i o f. Bitraversable f => Signal i o -> Signal (f i i) o
-split (Signal s) = Signal s { write = void <<< bitraverse s.write s.write }
+instance applicativeSignal :: Applicative Signal where
+  pure a = Signal { event: pure a, read: pure a }
 
-instance readableSignal :: Exports.Readable Signal Effect where
-  read (Signal s) = s.read
-  subscribe k (Signal s) = s.subscribe k
+instance bindSignal :: Bind Signal where
+  bind (Signal s) f =
+    Signal
+      { event: s.event >>= \a -> case f a of Signal n -> n.event
+      , read: s.read >>= \a -> case f a of Signal n -> n.read
+      }
 
-instance writableSignal :: Exports.Writable Signal Effect where
-  write a (Signal s) = s.write a
+instance monadSignal :: Monad Signal
 
-instance profunctorSignal :: Profunctor Signal where
-  dimap f g (Signal s) = Signal { read, write, subscribe }
-    where
-    read = map g s.read
+instance eventSourceSignal :: EventSource (Signal a) a where
+  source (Signal s) = s.event
 
-    write a = s.write (f a)
+instance semigroupSignal :: Semigroup a => Semigroup (Signal a) where
+  append = lift2 append
 
-    subscribe k = s.subscribe \a -> k (g a)
-
-instance functorSignal :: Functor (Signal i) where
-  map = rmap
+instance monoidSignal :: Monoid a => Monoid (Signal a) where
+  mempty = Signal { event: mempty, read: mempty }

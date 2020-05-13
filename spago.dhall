@@ -4,7 +4,13 @@ You can edit this file as you like.
 -}
 { name = "wire-signal"
 , dependencies =
-  [ "arrays", "effect", "profunctor", "refs", "unsafe-reference" ]
+  [ "arrays"
+  , "effect"
+  , "filterable"
+  , "profunctor"
+  , "refs"
+  , "unsafe-reference"
+  ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
 }
