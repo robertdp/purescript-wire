@@ -5,27 +5,24 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
-import Wire.Event.Class (class EventSource, sink, source)
+import Wire.Event.Class (class EventSource, sink)
 
 newtype Signal a
   = Signal
   { event :: Event a
   , read :: Effect a
-  , push :: a -> Effect Unit
-  , kill :: Effect Unit
+  , write :: a -> Effect Unit
   }
 
-create :: forall source a. EventSource source a => a -> source -> Effect (Signal a)
-create init from = do
+create :: forall a. a -> Effect (Signal a)
+create init = do
   value <- Ref.new init
   inner <- Event.create
   let
     push a = do
       Ref.write a value
       inner.push a
-  cancel <-
-    Event.subscribe (source from) push
-  let
+
     event =
       Event.makeEvent \emit -> do
         _ <- Ref.read value >>= emit
@@ -34,8 +31,7 @@ create init from = do
     $ Signal
         { event
         , read: Ref.read value
-        , push
-        , kill: cancel
+        , write: push
         }
 
 read :: forall a. Signal a -> Effect a
@@ -45,10 +41,7 @@ subscribe :: forall a. Signal a -> Subscribe a
 subscribe = sink
 
 write :: forall a. Signal a -> a -> Effect Unit
-write (Signal s) = s.push
-
-kill :: forall a. Signal a -> Effect Unit
-kill (Signal s) = s.kill
+write (Signal s) = s.write
 
 instance eventSourceSignal :: EventSource (Signal a) a where
   source (Signal s) = s.event
