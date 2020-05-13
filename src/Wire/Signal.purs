@@ -11,15 +11,14 @@ newtype Signal a
   = Signal
   { event :: Event a
   , read :: Effect a
-  , kill :: Effect Unit
   }
 
 fromSource :: forall source a. EventSource source a => a -> source -> Effect (Signal a)
 fromSource init from = do
   value <- Ref.new init
   shared <- Event.share (source from)
-  kill <- Event.subscribe shared.event (flip Ref.write value)
-  pure $ Signal { event: shared.event, read: Ref.read value, kill }
+  _ <- Event.subscribe shared.event (flip Ref.write value)
+  pure $ Signal { event: shared.event, read: Ref.read value }
 
 read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
