@@ -29,9 +29,9 @@ read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
 
 subscribe :: forall sink a. EventSink sink a => Signal a -> sink -> Effect (Canceler)
-subscribe sig@(Signal s) k = do
-  _ <- sink (source_ \emit -> do s.read >>= emit *> mempty) k
-  sink sig k
+subscribe s k = do
+  _ <- sink (source_ \emit -> read s >>= emit *> mempty) k
+  sink s k
 
 write :: forall a. a -> Signal a -> Effect Unit
 write a (Signal s) = s.push a
