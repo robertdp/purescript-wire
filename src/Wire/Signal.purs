@@ -28,7 +28,7 @@ create init from = do
 read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
 
-subscribe :: forall sink a. EventSink sink a => Signal a -> sink -> Effect (Canceler)
+subscribe :: forall sink a. EventSink sink a => Signal a -> sink -> Effect Canceler
 subscribe s k = do
   _ <- sink (source_ \emit -> read s >>= emit *> mempty) k
   sink s k
