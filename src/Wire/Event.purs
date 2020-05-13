@@ -15,9 +15,9 @@ import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
 
 newtype Event a
-  = Event (Subscriber a)
+  = Event (Subscribe a)
 
-type Subscriber a
+type Subscribe a
   = (a -> Effect Unit) -> Effect (Canceler)
 
 type Canceler
@@ -40,10 +40,10 @@ create = do
     push a = Ref.read subscribers >>= traverse_ \emit -> emit a
   pure { event, push }
 
-makeEvent :: forall a. Subscriber a -> Event a
+makeEvent :: forall a. Subscribe a -> Event a
 makeEvent = Event
 
-subscribe :: forall a. Event a -> Subscriber a
+subscribe :: forall a. Event a -> Subscribe a
 subscribe (Event event) k = event k
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a

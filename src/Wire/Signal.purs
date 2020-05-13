@@ -4,7 +4,7 @@ import Prelude
 import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Class (class EventSink, class EventSource, source)
-import Wire.Event (Event, Subscriber)
+import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
 
 newtype Signal a
@@ -28,7 +28,7 @@ signal init from = do
 read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
 
-subscribe :: forall a. Signal a -> Subscriber a
+subscribe :: forall a. Signal a -> Subscribe a
 subscribe (Signal s) k = do
   _ <- s.read >>= k
   Event.subscribe s.event k
