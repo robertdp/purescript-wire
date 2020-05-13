@@ -2,7 +2,7 @@ module Wire.Class where
 
 import Prelude
 import Effect (Effect)
-import Wire.Event (Event, makeEvent, subscribe)
+import Wire.Event (Event, Subscribe, makeEvent, subscribe)
 
 class EventSource source a | source -> a where
   source :: source -> Event a
@@ -18,3 +18,9 @@ instance eventSourceSubscriber :: EventSource ((a -> Effect Unit) -> Effect (Eff
 
 instance eventSinkSubscriber :: EventSink (a -> Effect Unit) a where
   sink to from = subscribe (source from) to
+
+source_ :: forall a. Subscribe a -> Event a
+source_ = source
+
+sink_ :: forall source a. EventSource source a => (a -> Effect Unit) -> source -> Effect (Effect Unit)
+sink_ = sink
