@@ -18,17 +18,21 @@ newtype Signal a
 create :: forall source a. EventSource source a => a -> source -> Effect (Signal a)
 create init from = do
   value <- Ref.new init
-  { event, push } <- Event.create
-  cancel <-
-    Event.subscribe (source from) \a -> do
+  inner <- Event.create
+  let
+    push a = do
       Ref.write a value
-      push a
+      inner.push a
+  cancel <-
+    Event.subscribe (source from) push
+  let
+    event =
+      Event.makeEvent \emit -> do
+        _ <- Ref.read value >>= emit
+        Event.subscribe inner.event emit
   pure
     $ Signal
-        { event:
-            Event.makeEvent \emit -> do
-              _ <- Ref.read value >>= emit
-              Event.subscribe event emit
+        { event
         , read: Ref.read value
         , push
         , kill: cancel
