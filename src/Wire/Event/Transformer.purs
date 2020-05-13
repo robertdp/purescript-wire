@@ -1,4 +1,4 @@
-module Wire.Transformer where
+module Wire.Event.Transformer where
 
 import Prelude
 import Control.Alt (alt)
