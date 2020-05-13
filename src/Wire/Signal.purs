@@ -37,6 +37,9 @@ read (Signal s) = s.read
 subscribe :: forall a. Signal a -> Subscribe a
 subscribe = sink
 
+distinct :: forall a. Eq a => Signal a -> Signal a
+distinct (Signal s) = Signal s { event = Event.distinct s.event }
+
 derive instance functorSignal :: Functor Signal
 
 instance applySignal :: Apply Signal where
