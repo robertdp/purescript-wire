@@ -18,7 +18,7 @@ newtype Event a
   = Event (Subscribe a)
 
 type Subscribe a
-  = (a -> Effect Unit) -> Effect (Canceler)
+  = (a -> Effect Unit) -> Effect Canceler
 
 type Canceler
   = Effect Unit
@@ -44,7 +44,7 @@ makeEvent :: forall a. Subscribe a -> Event a
 makeEvent = Event
 
 subscribe :: forall a. Event a -> Subscribe a
-subscribe (Event event) k = event k
+subscribe (Event event) = event
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a
 filter f (Event event) = Event \emit -> event \a -> when (f a) (emit a)
