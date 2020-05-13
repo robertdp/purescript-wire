@@ -15,8 +15,8 @@ newtype Signal a
   , kill :: Effect Unit
   }
 
-signal :: forall source a. EventSource source a => a -> source -> Effect (Signal a)
-signal init from = do
+create :: forall source a. EventSource source a => a -> source -> Effect (Signal a)
+create init from = do
   value <- Ref.new init
   { event, push } <- Event.create
   cancel <-
