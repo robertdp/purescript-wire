@@ -61,6 +61,16 @@ share event = do
   cancel <- subscribe event shared.push
   pure { event: shared.event, cancel }
 
+distinct :: forall a. Eq a => Event a -> Event a
+distinct (Event event) =
+  Event \emit -> do
+    latest <- Ref.new Nothing
+    event \a -> do
+      b <- Ref.read latest
+      when (pure a /= b) do
+        Ref.write (pure a) latest
+        emit a
+
 sample :: forall a. a -> Event a -> Effect { read :: Effect a, cancel :: Effect Unit }
 sample a event = do
   value <- Ref.new a
