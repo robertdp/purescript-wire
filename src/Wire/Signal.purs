@@ -5,7 +5,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
-import Wire.Event.Class (class EventSource, sink, source, source_)
+import Wire.Event.Class (class EventSource, sink, source)
 
 newtype Signal a
   = Signal
@@ -23,15 +23,22 @@ create init from = do
     Event.subscribe (source from) \a -> do
       Ref.write a value
       push a
-  pure $ Signal { event: event, read: Ref.read value, push, kill: cancel }
+  pure
+    $ Signal
+        { event:
+            Event.makeEvent \emit -> do
+              _ <- Ref.read value >>= emit
+              Event.subscribe event emit
+        , read: Ref.read value
+        , push
+        , kill: cancel
+        }
 
 read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
 
 subscribe :: forall a. Signal a -> Subscribe a
-subscribe s k = do
-  _ <- sink (source_ \emit -> read s >>= emit *> mempty) k
-  sink s k
+subscribe = sink
 
 write :: forall a. Signal a -> a -> Effect Unit
 write (Signal s) = s.push
