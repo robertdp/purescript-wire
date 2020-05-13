@@ -1,6 +1,7 @@
 module Wire.Signal where
 
 import Prelude
+import Control.Apply (lift2)
 import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
@@ -11,15 +12,14 @@ newtype Signal a
   = Signal
   { event :: Event a
   , read :: Effect a
-  , write :: a -> Effect Unit
   }
 
-create :: forall a. a -> Effect (Signal a)
+create :: forall a. a -> Effect { signal :: Signal a, write :: a -> Effect Unit }
 create init = do
   value <- Ref.new init
   inner <- Event.create
   let
-    push a = do
+    write a = do
       Ref.write a value
       inner.push a
 
@@ -27,12 +27,9 @@ create init = do
       Event.makeEvent \emit -> do
         _ <- Ref.read value >>= emit
         Event.subscribe inner.event emit
-  pure
-    $ Signal
-        { event
-        , read: Ref.read value
-        , write: push
-        }
+
+    signal = Signal { event, read: Ref.read value }
+  pure { signal, write }
 
 read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
@@ -40,8 +37,32 @@ read (Signal s) = s.read
 subscribe :: forall a. Signal a -> Subscribe a
 subscribe = sink
 
-write :: forall a. Signal a -> a -> Effect Unit
-write (Signal s) = s.write
+derive instance functorSignal :: Functor Signal
+
+instance applySignal :: Apply Signal where
+  apply (Signal f) (Signal a) =
+    Signal
+      { event: apply f.event a.event
+      , read: apply f.read a.read
+      }
+
+instance applicativeSignal :: Applicative Signal where
+  pure a = Signal { event: pure a, read: pure a }
+
+instance bindSignal :: Bind Signal where
+  bind (Signal s) f =
+    Signal
+      { event: s.event >>= \a -> case f a of Signal n -> n.event
+      , read: s.read >>= \a -> case f a of Signal n -> n.read
+      }
+
+instance monadSignal :: Monad Signal
 
 instance eventSourceSignal :: EventSource (Signal a) a where
   source (Signal s) = s.event
+
+instance semigroupSignal :: Semigroup a => Semigroup (Signal a) where
+  append = lift2 append
+
+instance monoidSignal :: Monoid a => Monoid (Signal a) where
+  mempty = Signal { event: mempty, read: mempty }
