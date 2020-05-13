@@ -3,7 +3,7 @@ module Wire.Signal where
 import Prelude
 import Effect (Effect)
 import Effect.Ref as Ref
-import Wire.Class (class EventSink, class EventSource, sink, source)
+import Wire.Class (class EventSink, class EventSource, sink, source, source_)
 import Wire.Event (Event, Canceler)
 import Wire.Event as Event
 
@@ -30,8 +30,7 @@ read (Signal s) = s.read
 
 subscribe :: forall sink a. EventSink sink a => Signal a -> sink -> Effect (Canceler)
 subscribe (Signal s) k = do
-  value <- s.read
-  _ <- sink k (source (pure value :: Event _))
+  _ <- sink k (source_ \emit -> do s.read >>= emit *> mempty)
   sink k (source (Signal s))
 
 write :: forall a. a -> Signal a -> Effect Unit
