@@ -17,8 +17,8 @@ connect from transformer = transform transformer (source from)
 
 infixl 2 connect as ==>
 
-makeTransformer :: forall i o. (Event i -> Event o) -> Transformer i o
-makeTransformer = Transformer
+lift :: forall i o. (Event i -> Event o) -> Transformer i o
+lift = Transformer
 
 transform :: forall i o. Transformer i o -> Event i -> Event o
 transform (Transformer t) = t
