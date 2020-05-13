@@ -6,8 +6,8 @@ import Data.Compactable (separate)
 import Data.Either (Either(..))
 import Data.Profunctor (class Profunctor)
 import Data.Profunctor.Choice (class Choice)
-import Wire.Class (class EventSource, source)
 import Wire.Event (Event, makeEvent, subscribe)
+import Wire.Event.Class (class EventSource, source)
 
 newtype Transformer i o
   = Transformer (Event i -> Event o)

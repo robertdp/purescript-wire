@@ -1,4 +1,4 @@
-module Wire.Class where
+module Wire.Event.Class where
 
 import Prelude
 import Effect (Effect)

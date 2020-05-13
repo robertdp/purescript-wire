@@ -3,9 +3,9 @@ module Wire.Signal where
 import Prelude
 import Effect (Effect)
 import Effect.Ref as Ref
-import Wire.Class (class EventSink, class EventSource, sink, source, source_)
 import Wire.Event (Event, Canceler)
 import Wire.Event as Event
+import Wire.Event.Class (class EventSink, class EventSource, sink, source, source_)
 
 newtype Signal a
   = Signal
