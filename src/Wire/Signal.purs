@@ -16,14 +16,12 @@ newtype Signal a
   , read :: Effect a
   }
 
-create :: forall a. a -> Effect { signal :: Signal a, write :: a -> Effect Unit }
+create :: forall a. a -> Effect { signal :: Signal a, modify :: (a -> a) -> Effect Unit }
 create init = do
   value <- Ref.new init
   inner <- Event.create
   let
-    write a = do
-      Ref.write a value
-      inner.push a
+    modify f = Ref.modify f value >>= inner.push
 
     event =
       Event.makeEvent \emit -> do
@@ -31,7 +29,7 @@ create init = do
         Event.subscribe inner.event emit
 
     signal = Signal { event, read: Ref.read value }
-  pure { signal, write }
+  pure { signal, modify }
 
 read :: forall a. Signal a -> Effect a
 read (Signal s) = s.read
@@ -46,12 +44,12 @@ share :: forall a. Signal a -> Effect (Signal a)
 share source = do
   subscriberCount <- Ref.new 0
   cancelSource <- Ref.new Nothing
-  { signal: Signal shared, write } <- create =<< read source
+  { signal: Signal shared, modify } <- create =<< read source
   let
     incrementCount = do
       count <- Ref.modify (_ + 1) subscriberCount
       when (count == 1) do
-        cancel <- subscribe source write
+        cancel <- subscribe source (modify <<< const)
         Ref.write (Just cancel) cancelSource
 
     decrementCount = do
@@ -69,8 +67,8 @@ share source = do
 
 sample :: forall a. a -> Event a -> Effect { signal :: Signal a, unsubscribe :: Effect Unit }
 sample init event = do
-  { signal, write } <- create init
-  unsubscribe <- Event.subscribe event write
+  { signal, modify } <- create init
+  unsubscribe <- Event.subscribe event (modify <<< const)
   pure { signal, unsubscribe }
 
 derive instance functorSignal :: Functor Signal
