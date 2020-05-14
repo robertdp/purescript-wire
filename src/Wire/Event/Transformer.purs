@@ -7,7 +7,7 @@ import Data.Either (Either(..))
 import Data.Filterable (class Filterable, filter, filterMap, partition, partitionMap)
 import Data.Profunctor (class Profunctor)
 import Data.Profunctor.Choice (class Choice)
-import Wire.Event (Event, makeEvent, subscribe)
+import Wire.Event (Event)
 import Wire.Event.Class (class EventSource, source)
 
 newtype Transformer i o
@@ -36,18 +36,8 @@ instance profunctorTransformer :: Profunctor Transformer where
   dimap a2b c2d (Transformer t) = Transformer (map c2d <<< t <<< map a2b)
 
 instance choiceTransformer :: Choice Transformer where
-  left (Transformer a2b) =
-    Transformer \eventAC ->
-      let
-        { left: eventA, right: eventC } = separate eventAC
-      in
-        alt (map Left (a2b eventA)) (map Right eventC)
-  right (Transformer b2c) =
-    Transformer \eventAB ->
-      let
-        { left: eventA, right: eventB } = separate eventAB
-      in
-        alt (map Left eventA) (map Right (b2c eventB))
+  left (Transformer t) = Transformer (separate >>> \event -> alt (map Left (t event.left)) (map Right event.right))
+  right (Transformer t) = Transformer (separate >>> \event -> alt (map Left event.left) (map Right (t event.right)))
 
 instance compactableTransformer :: Compactable (Transformer i) where
   compact (Transformer t) = Transformer (compact <<< t)
