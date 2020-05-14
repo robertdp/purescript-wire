@@ -2,8 +2,9 @@ module Wire.Event.Transformer where
 
 import Prelude
 import Control.Alt (alt)
-import Data.Compactable (separate)
+import Data.Compactable (class Compactable, compact, separate)
 import Data.Either (Either(..))
+import Data.Filterable (class Filterable, filter, filterMap, partition, partitionMap)
 import Data.Profunctor (class Profunctor)
 import Data.Profunctor.Choice (class Choice)
 import Wire.Event (Event, makeEvent, subscribe)
@@ -70,3 +71,22 @@ instance choiceTransformer :: Choice Transformer where
         eventAC = alt (map Left eventA) (map Right eventC)
       in
         eventAC
+
+instance compactableTransformer :: Compactable (Transformer i) where
+  compact (Transformer t) = Transformer (compact <<< t)
+  separate (Transformer t) =
+    { left: Transformer (_.left <<< separate <<< t)
+    , right: Transformer (_.right <<< separate <<< t)
+    }
+
+instance filterableTransformer :: Filterable (Transformer i) where
+  partitionMap f (Transformer t) =
+    { left: Transformer (_.left <<< partitionMap f <<< t)
+    , right: Transformer (_.right <<< partitionMap f <<< t)
+    }
+  partition f (Transformer t) =
+    { yes: Transformer (_.yes <<< partition f <<< t)
+    , no: Transformer (_.no <<< partition f <<< t)
+    }
+  filterMap f (Transformer t) = Transformer (filterMap f <<< t)
+  filter f (Transformer t) = Transformer (filter f <<< t)
