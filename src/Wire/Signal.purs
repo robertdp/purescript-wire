@@ -2,11 +2,13 @@ module Wire.Signal where
 
 import Prelude
 import Control.Apply (lift2)
+import Data.Foldable (sequence_)
+import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
-import Wire.Event.Class (class EventSource, sink, source)
+import Wire.Event.Class (class EventSource, sink, source, source_)
 
 newtype Signal a
   = Signal
@@ -39,6 +41,31 @@ subscribe = sink
 
 distinct :: forall a. Eq a => Signal a -> Signal a
 distinct (Signal s) = Signal s { event = Event.distinct s.event }
+
+share :: forall a. Signal a -> Effect { signal :: Signal a, write :: a -> Effect Unit }
+share source = do
+  subscriberCount <- Ref.new 0
+  cancelSource <- Ref.new Nothing
+  { signal: Signal shared, write } <- create =<< read source
+  let
+    incrementCount = do
+      count <- Ref.modify (add 1) subscriberCount
+      when (count == 1) do
+        cancel <- subscribe source write
+        Ref.write (Just cancel) cancelSource
+
+    decrementCount = do
+      count <- Ref.modify (sub 1) subscriberCount
+      when (count == 0) do
+        Ref.read cancelSource >>= sequence_
+        Ref.write Nothing cancelSource
+
+    event =
+      source_ \emit -> do
+        incrementCount
+        cancel <- Event.subscribe shared.event emit
+        pure do cancel *> decrementCount
+  pure { signal: Signal { event, read: shared.read }, write }
 
 derive instance functorSignal :: Functor Signal
 
