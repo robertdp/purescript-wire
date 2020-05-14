@@ -33,12 +33,7 @@ instance categoryTransformer :: Category Transformer where
   identity = Transformer identity
 
 instance profunctorTransformer :: Profunctor Transformer where
-  dimap a2b c2d (Transformer b2c) =
-    Transformer \eventA ->
-      let
-        eventB = makeEvent \emitB -> subscribe eventA \a -> emitB (a2b a)
-      in
-        makeEvent \emitD -> subscribe (b2c eventB) \c -> emitD (c2d c)
+  dimap a2b c2d (Transformer t) = Transformer (map c2d <<< t <<< map a2b)
 
 instance choiceTransformer :: Choice Transformer where
   left (Transformer a2b) =
