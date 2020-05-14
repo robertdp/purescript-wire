@@ -37,28 +37,22 @@ instance profunctorTransformer :: Profunctor Transformer where
     Transformer \eventA ->
       let
         eventB = makeEvent \emitB -> subscribe eventA \a -> emitB (a2b a)
-
-        eventC = b2c eventB
       in
-        makeEvent \emitD -> subscribe eventC \c -> emitD (c2d c)
+        makeEvent \emitD -> subscribe (b2c eventB) \c -> emitD (c2d c)
 
 instance choiceTransformer :: Choice Transformer where
   left (Transformer a2b) =
     Transformer \eventAC ->
       let
         { left: eventA, right: eventC } = separate eventAC
-
-        eventB = a2b eventA
       in
-        alt (map Left eventB) (map Right eventC)
+        alt (map Left (a2b eventA)) (map Right eventC)
   right (Transformer b2c) =
     Transformer \eventAB ->
       let
         { left: eventA, right: eventB } = separate eventAB
-
-        eventC = b2c eventB
       in
-        alt (map Left eventA) (map Right eventC)
+        alt (map Left eventA) (map Right (b2c eventB))
 
 instance compactableTransformer :: Compactable (Transformer i) where
   compact (Transformer t) = Transformer (compact <<< t)
