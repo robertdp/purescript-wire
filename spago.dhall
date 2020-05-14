@@ -2,7 +2,7 @@
 Welcome to a Spago project!
 You can edit this file as you like.
 -}
-{ name = "wire-signal"
+{ name = "wire"
 , dependencies =
   [ "arrays"
   , "effect"
