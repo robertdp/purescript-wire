@@ -55,11 +55,30 @@ fold f b (Event eventA) =
     accum <- Ref.new b
     eventA \a -> Ref.modify (flip f a) accum >>= emitB
 
-share :: forall a. Event a -> Effect { event :: Event a, cancel :: Effect Unit }
-share event = do
+share :: forall a. Event a -> Effect (Event a)
+share source = do
+  subscriberCount <- Ref.new 0
+  cancelSource <- Ref.new Nothing
   shared <- create
-  cancel <- subscribe event shared.push
-  pure { event: shared.event, cancel }
+  let
+    incrementCount = do
+      count <- Ref.modify (add 1) subscriberCount
+      when (count == 1) do
+        cancel <- subscribe source shared.push
+        Ref.write (Just cancel) cancelSource
+
+    decrementCount = do
+      count <- Ref.modify (sub 1) subscriberCount
+      when (count == 0) do
+        Ref.read cancelSource >>= sequence_
+        Ref.write Nothing cancelSource
+
+    event =
+      Event \emit -> do
+        incrementCount
+        cancel <- subscribe shared.event emit
+        pure do cancel *> decrementCount
+  pure event
 
 distinct :: forall a. Eq a => Event a -> Event a
 distinct (Event event) =
