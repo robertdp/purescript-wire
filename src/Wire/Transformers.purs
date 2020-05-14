@@ -1,8 +1,13 @@
-module Wire.Transformers where
+module Wire.Transformers
+  ( module Exports
+  , fold
+  , distinct
+  ) where
 
 import Prelude
 import Wire.Event as Event
 import Wire.Event.Transformer (Transformer, lift)
+import Wire.Event.Transformer (Transformer(..), connect, lift, transform, (:~>), (<~:)) as Exports
 
 fold :: forall a b. (b -> a -> b) -> b -> Transformer a b
 fold f b = lift (Event.fold f b)
