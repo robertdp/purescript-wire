@@ -6,7 +6,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
-import Wire.Event.Class (class EventSource, sink)
+import Wire.Event.Class (class EventSource, sink, source)
 
 newtype Signal a
   = Signal
@@ -52,8 +52,8 @@ instance applicativeSignal :: Applicative Signal where
 instance bindSignal :: Bind Signal where
   bind (Signal s) f =
     Signal
-      { event: s.event >>= \a -> case f a of Signal n -> n.event
-      , read: s.read >>= \a -> case f a of Signal n -> n.read
+      { event: s.event >>= f >>> source
+      , read: s.read >>= f >>> read
       }
 
 instance monadSignal :: Monad Signal
