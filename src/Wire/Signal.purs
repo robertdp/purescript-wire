@@ -67,6 +67,12 @@ share source = do
         pure do cancel *> decrementCount
   pure $ Signal { event, read: shared.read }
 
+sample :: forall a. a -> Event a -> Effect { signal :: Signal a, unsubscribe :: Effect Unit }
+sample init event = do
+  { signal, write } <- create init
+  unsubscribe <- Event.subscribe event write
+  pure { signal, unsubscribe }
+
 derive instance functorSignal :: Functor Signal
 
 instance applySignal :: Apply Signal where

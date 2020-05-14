@@ -90,12 +90,6 @@ distinct (Event event) =
         Ref.write (pure a) latest
         emit a
 
-sample :: forall a. a -> Event a -> Effect { read :: Effect a, cancel :: Effect Unit }
-sample a event = do
-  value <- Ref.new a
-  cancel <- subscribe event (flip Ref.write value)
-  pure { read: Ref.read value, cancel }
-
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
 
