@@ -49,13 +49,13 @@ share source = do
   { signal: Signal shared, write } <- create =<< read source
   let
     incrementCount = do
-      count <- Ref.modify (add 1) subscriberCount
+      count <- Ref.modify (_ + 1) subscriberCount
       when (count == 1) do
         cancel <- subscribe source write
         Ref.write (Just cancel) cancelSource
 
     decrementCount = do
-      count <- Ref.modify (sub 1) subscriberCount
+      count <- Ref.modify (_ - 1) subscriberCount
       when (count == 0) do
         Ref.read cancelSource >>= sequence_
         Ref.write Nothing cancelSource
