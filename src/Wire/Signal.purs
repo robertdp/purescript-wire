@@ -8,7 +8,7 @@ import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
-import Wire.Event.Class (class EventSource, sink, source, source_)
+import Wire.Event.Class (class EventSource, sink, source)
 
 newtype Signal a
   = Signal
@@ -61,7 +61,7 @@ share source = do
         Ref.write Nothing cancelSource
 
     event =
-      source_ \emit -> do
+      Event.makeEvent \emit -> do
         incrementCount
         cancel <- Event.subscribe shared.event emit
         pure do cancel *> decrementCount
