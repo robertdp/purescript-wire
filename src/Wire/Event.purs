@@ -50,10 +50,10 @@ filter :: forall a. (a -> Boolean) -> Event a -> Event a
 filter f (Event event) = Event \emit -> event \a -> when (f a) (emit a)
 
 fold :: forall a b. (b -> a -> b) -> b -> Event a -> Event b
-fold f b (Event eventA) =
-  Event \emitB -> do
+fold f b (Event event) =
+  Event \emit -> do
     accum <- Ref.new b
-    eventA \a -> Ref.modify (flip f a) accum >>= emitB
+    event \a -> Ref.modify (flip f a) accum >>= emit
 
 share :: forall a. Event a -> Effect (Event a)
 share source = do
@@ -118,17 +118,17 @@ instance applicativeEvent :: Applicative Event where
   pure a = Event \emit -> emit a *> mempty
 
 instance bindEvent :: Bind Event where
-  bind (Event eventA) f =
-    Event \emitB -> do
-      cancelB <- Ref.new Nothing
-      cancelA <-
-        eventA \a -> do
-          Ref.read cancelB >>= sequence_
-          cancel <- subscribe (f a) emitB
-          Ref.write (Just cancel) cancelB
+  bind (Event outer) f =
+    Event \emit -> do
+      cancelInner <- Ref.new Nothing
+      cancelOuter <-
+        outer \a -> do
+          Ref.read cancelInner >>= sequence_
+          cancel <- subscribe (f a) emit
+          Ref.write (Just cancel) cancelInner
       pure do
-        Ref.read cancelB >>= sequence_
-        cancelA
+        Ref.read cancelInner >>= sequence_
+        cancelOuter
 
 instance monadEvent :: Monad Event
 
