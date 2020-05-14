@@ -42,7 +42,7 @@ subscribe = sink
 distinct :: forall a. Eq a => Signal a -> Signal a
 distinct (Signal s) = Signal s { event = Event.distinct s.event }
 
-share :: forall a. Signal a -> Effect { signal :: Signal a, write :: a -> Effect Unit }
+share :: forall a. Signal a -> Effect (Signal a)
 share source = do
   subscriberCount <- Ref.new 0
   cancelSource <- Ref.new Nothing
@@ -65,7 +65,7 @@ share source = do
         incrementCount
         cancel <- Event.subscribe shared.event emit
         pure do cancel *> decrementCount
-  pure { signal: Signal { event, read: shared.read }, write }
+  pure $ Signal { event, read: shared.read }
 
 derive instance functorSignal :: Functor Signal
 
