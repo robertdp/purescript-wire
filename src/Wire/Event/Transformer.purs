@@ -16,7 +16,12 @@ newtype Transformer i o
 connect :: forall i source o. EventSource source i => source -> Transformer i o -> Event o
 connect from transformer = transform transformer (source from)
 
-infixl 2 connect as ==>
+connectFlipped :: forall o source i. EventSource source i => Transformer i o -> source -> Event o
+connectFlipped = flip connect
+
+infixl 2 connect as :~>
+
+infixr 2 connectFlipped as <~:
 
 lift :: forall i o. (Event i -> Event o) -> Transformer i o
 lift = Transformer
