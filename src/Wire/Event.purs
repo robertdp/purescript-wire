@@ -112,7 +112,7 @@ instance applyEvent :: Apply Event where
         eventA \a -> do
           Ref.write (Just a) latestA
           Ref.read latestF >>= traverse_ \f -> emitB (f a)
-      pure (cancelF *> cancelA)
+      pure do cancelF *> cancelA
 
 instance applicativeEvent :: Applicative Event where
   pure a = Event \emit -> emit a *> mempty
@@ -142,7 +142,7 @@ instance altEvent :: Alt Event where
     Event \emit -> do
       cancel1 <- event1 emit
       cancel2 <- event2 emit
-      pure (cancel1 *> cancel2)
+      pure do cancel1 *> cancel2
 
 instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
   append = lift2 append
