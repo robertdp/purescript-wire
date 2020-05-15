@@ -13,15 +13,15 @@ import Wire.Event.Class (class EventSource, source)
 newtype Transformer i o
   = Transformer (Event i -> Event o)
 
-transform :: forall o i source. EventSource source i => source -> Transformer i o -> Event o
-transform from (Transformer t) = t (source from)
+transform :: forall o i source. EventSource source i => Transformer i o -> source -> Event o
+transform (Transformer t) from = t (source from)
 
-transformFlipped :: forall o i source. EventSource source i => Transformer i o -> source -> Event o
+transformFlipped :: forall o i source. EventSource source i => source -> Transformer i o -> Event o
 transformFlipped = flip transform
 
-infixl 2 transform as :~>
+infixr 2 transform as <~:
 
-infixr 2 transformFlipped as <~:
+infixl 2 transformFlipped as :~>
 
 lift :: forall i o. (Event i -> Event o) -> Transformer i o
 lift = Transformer
