@@ -101,12 +101,6 @@ bufferUntil (Event flush) (Event event) =
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs = Event \emit -> traverse_ emit xs *> mempty
 
-sample :: forall a. a -> Event a -> Effect { read :: Effect a, cancel :: Effect Unit }
-sample init (Event event) = do
-  value <- Ref.new init
-  cancel <- event (flip Ref.write value)
-  pure { read: Ref.read value, cancel }
-
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
 
