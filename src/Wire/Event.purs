@@ -116,7 +116,7 @@ buffer :: forall a b. Event b -> Event a -> Event (Array a)
 buffer (Event flush) (Event event) =
   Event \emit -> do
     values <- Ref.new []
-    cancelFlush <- flush \_ -> Ref.modify' (\value -> { state: [], value }) values >>= emit
+    cancelFlush <- flush \_ -> Ref.modify' { state: [], value: _ } values >>= emit
     cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) values
     pure do
       cancelEvent
