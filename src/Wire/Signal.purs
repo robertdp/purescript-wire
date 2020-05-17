@@ -26,6 +26,6 @@ create init = do
 
     event =
       Event.makeEvent \emit -> do
-        _ <- Ref.read value >>= emit
+        Ref.read value >>= emit
         Event.subscribe inner.event emit
   pure { event, read, write, modify }
