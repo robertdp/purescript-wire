@@ -44,6 +44,11 @@ sample init event = do
   unsubscribe <- Event.subscribe event (modify <<< const)
   pure { signal, unsubscribe }
 
+share :: forall a. Signal a -> Effect (Signal a)
+share (Signal s) = do
+  event <- Event.share s.event
+  pure $ Signal { event, read: s.read }
+
 derive instance functorSignal :: Functor Signal
 
 instance applySignal :: Apply Signal where
