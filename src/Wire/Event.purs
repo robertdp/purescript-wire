@@ -125,14 +125,12 @@ take n (Event event) =
   Event \emit -> do
     remaining <- Ref.new n
     subscription <- Ref.new Nothing
-    let
-      decrement = do
-        Ref.read subscription
-          >>= traverse_ \cancel -> do
-              r <- Ref.modify (_ - 1) remaining
-              when (r == 0) do cancel
     when (n > 0) do
-      cancel <- event \a -> decrement *> emit a
+      cancel <-
+        event \a -> do
+          r <- Ref.modify (_ - 1) remaining
+          when (r == 0) do Ref.read subscription >>= sequence_
+          emit a
       Ref.write (Just cancel) subscription
     pure do
       Ref.read subscription >>= sequence_
