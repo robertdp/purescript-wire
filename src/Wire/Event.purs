@@ -1,7 +1,7 @@
 module Wire.Event where
 
 import Prelude
-import Control.Alt (class Alt, (<|>))
+import Control.Alt (class Alt)
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
 import Data.Array as Array
@@ -11,7 +11,6 @@ import Data.Foldable (class Foldable, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect (Effect)
 import Effect.Ref as Ref
-import Effect.Timer as Timer
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
 
@@ -90,27 +89,6 @@ distinct (Event event) =
       when (pure a /= b) do
         Ref.write (pure a) latest
         emit a
-
-delay :: forall a. Int -> Event a -> Event a
-delay ms (Event event) =
-  Event \emit -> do
-    canceled <- Ref.new false
-    cancel <-
-      event \a -> do
-        _ <- Timer.setTimeout ms do unlessM (Ref.read canceled) do emit a
-        pure unit
-    pure do
-      Ref.write true canceled
-      cancel
-
-interval :: Int -> Event Unit
-interval ms =
-  Event \emit -> do
-    intervalId <- Timer.setInterval ms do emit unit
-    pure do Timer.clearInterval intervalId
-
-timer :: Int -> Int -> Event Unit
-timer after ms = delay after do pure unit <|> interval ms
 
 buffer :: forall a b. Event b -> Event a -> Event (Array a)
 buffer (Event flush) (Event event) =
