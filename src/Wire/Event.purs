@@ -98,6 +98,18 @@ buffer (Event flush) (Event event) =
     cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) values
     pure do cancelEvent *> cancelFlush
 
+chunk :: forall a. Int -> Event a -> Event (Array a)
+chunk n (Event event) =
+  Event \emit -> do
+    values <- Ref.new []
+    event \a -> Ref.modify' (update a) values >>= traverse_ emit
+  where
+  update a values =
+    if Array.length values < n then
+      { state: Array.snoc values a, value: Nothing }
+    else
+      { state: [], value: Just (Array.snoc values a) }
+
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs = Event \emit -> traverse_ emit xs *> mempty
 
