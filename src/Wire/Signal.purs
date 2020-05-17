@@ -2,8 +2,6 @@ module Wire.Signal where
 
 import Prelude
 import Control.Apply (lift2)
-import Data.Foldable (sequence_)
-import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Effect.Ref as Ref
 import Wire.Event (Event, Subscribe)
@@ -39,31 +37,6 @@ subscribe = sink
 
 distinct :: forall a. Eq a => Signal a -> Signal a
 distinct (Signal s) = Signal s { event = Event.distinct s.event }
-
-share :: forall a. Signal a -> Effect (Signal a)
-share source = do
-  subscriberCount <- Ref.new 0
-  cancelSource <- Ref.new Nothing
-  { signal: Signal shared, modify } <- create =<< read source
-  let
-    incrementCount = do
-      count <- Ref.modify (_ + 1) subscriberCount
-      when (count == 1) do
-        cancel <- subscribe source (modify <<< const)
-        Ref.write (Just cancel) cancelSource
-
-    decrementCount = do
-      count <- Ref.modify (_ - 1) subscriberCount
-      when (count == 0) do
-        Ref.read cancelSource >>= sequence_
-        Ref.write Nothing cancelSource
-
-    event =
-      Event.makeEvent \emit -> do
-        incrementCount
-        cancel <- Event.subscribe shared.event emit
-        pure do cancel *> decrementCount
-  pure $ Signal { event, read: shared.read }
 
 sample :: forall a. a -> Event a -> Effect { signal :: Signal a, unsubscribe :: Effect Unit }
 sample init event = do
