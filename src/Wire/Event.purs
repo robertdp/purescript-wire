@@ -90,25 +90,13 @@ distinct (Event event) =
         Ref.write (pure a) latest
         emit a
 
-buffer :: forall a b. Event b -> Event a -> Event (Array a)
-buffer (Event flush) (Event event) =
+bufferUntil :: forall a b. Event b -> Event a -> Event (Array a)
+bufferUntil (Event flush) (Event event) =
   Event \emit -> do
-    values <- Ref.new []
-    cancelFlush <- flush \_ -> Ref.modify' { state: [], value: _ } values >>= emit
-    cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) values
+    buffer <- Ref.new []
+    cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) buffer
+    cancelFlush <- flush \_ -> Ref.modify' { state: [], value: _ } buffer >>= emit
     pure do cancelEvent *> cancelFlush
-
-chunk :: forall a. Int -> Event a -> Event (Array a)
-chunk n (Event event) =
-  Event \emit -> do
-    values <- Ref.new []
-    event \a -> Ref.modify' (update a) values >>= traverse_ emit
-  where
-  update a values =
-    if Array.length values < n then
-      { state: Array.snoc values a, value: Nothing }
-    else
-      { state: [], value: Just (Array.snoc values a) }
 
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs = Event \emit -> traverse_ emit xs *> mempty

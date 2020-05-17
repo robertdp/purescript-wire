@@ -17,8 +17,8 @@ fold f b = lift (Event.fold f b)
 distinct :: forall a. Eq a => Transformer a a
 distinct = lift Event.distinct
 
-buffer :: forall b a source. EventSource source b => source -> Transformer a (Array a)
-buffer flush = lift (Event.buffer (source flush))
+bufferUntil :: forall b a source. EventSource source b => source -> Transformer a (Array a)
+bufferUntil flush = lift (Event.bufferUntil (source flush))
 
 delay :: forall a. Int -> Transformer a a
 delay ms = lift (Time.delay ms)
