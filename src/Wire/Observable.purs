@@ -5,13 +5,14 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), isNothing)
 import Effect (Effect)
 import Effect.Ref as Ref
-import Wire.Event (Event)
+import Wire.Event (Event, Subscribe)
 import Wire.Event as Event
+import Wire.Event.Class (class EventSource)
 
-type Observable a b
-  = Event (Either a b)
+newtype Observable a b
+  = Observable (Event (Either a b))
 
-create :: forall a b. Effect { done :: b -> Effect Unit, event :: Observable a b, next :: a -> Effect Unit }
+create :: forall a b. Effect { done :: b -> Effect Unit, observable :: Observable a b, next :: a -> Effect Unit }
 create = do
   inner <- Event.create
   result <- Ref.new Nothing
@@ -30,4 +31,10 @@ create = do
           >>= case _ of
               Just b -> emit (Right b) *> mempty
               Nothing -> Event.subscribe inner.event emit
-  pure { event, next, done }
+  pure { observable: Observable event, next, done }
+
+subscribe :: forall b a. Observable a b -> Subscribe (Either a b)
+subscribe (Observable event) = Event.subscribe event
+
+instance eventSourceObservable :: EventSource (Observable a b) (Either a b) where
+  source (Observable event) = event
