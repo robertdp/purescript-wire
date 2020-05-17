@@ -126,6 +126,34 @@ buffer (Event flush) (Event event) =
       cancelEvent
       cancelFlush
 
+take :: forall a. Int -> Event a -> Event a
+take n (Event event) =
+  Event \emit -> do
+    remaining <- Ref.new n
+    subscription <- Ref.new Nothing
+    let
+      decrement = do
+        Ref.read subscription
+          >>= traverse_ \cancel -> do
+              r <- Ref.modify (_ - 1) remaining
+              when (r == 0) do cancel
+    when (n > 0) do
+      cancel <- event \a -> decrement *> emit a
+      Ref.write (Just cancel) subscription
+    pure do
+      Ref.read subscription >>= sequence_
+
+drop :: forall a. Int -> Event a -> Event a
+drop n (Event event) =
+  Event \emit -> do
+    remaining <- Ref.new n
+    event \a -> do
+      r <- Ref.read remaining
+      if r > 0 then
+        Ref.modify_ (_ - 1) remaining
+      else
+        emit a
+
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs = Event \emit -> traverse_ emit xs *> mempty
 
