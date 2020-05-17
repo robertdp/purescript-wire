@@ -8,15 +8,14 @@ import Data.Filterable (class Filterable, filter, filterMap, partition, partitio
 import Data.Profunctor (class Profunctor)
 import Data.Profunctor.Choice (class Choice)
 import Wire.Event (Event)
-import Wire.Event.Class (class EventSource, source)
 
 newtype Transformer i o
   = Transformer (Event i -> Event o)
 
-transform :: forall o i source. EventSource source i => Transformer i o -> source -> Event o
-transform (Transformer t) from = t (source from)
+transform :: forall o i. Transformer i o -> Event i -> Event o
+transform (Transformer t) = t
 
-transformFlipped :: forall o i source. EventSource source i => source -> Transformer i o -> Event o
+transformFlipped :: forall i o. Event i -> Transformer i o -> Event o
 transformFlipped = flip transform
 
 infixr 2 transform as <~:
