@@ -7,6 +7,7 @@ module Wire.Transformers
 import Prelude
 import Wire.Event as Event
 import Wire.Event.Class (class EventSource, source)
+import Wire.Event.Time as Time
 import Wire.Event.Transformer (Transformer(..), lift, transform, transformFlipped, (:~>), (<~:)) as Exports
 import Wire.Event.Transformer (Transformer, lift)
 
@@ -20,10 +21,4 @@ buffer :: forall b a source. EventSource source b => source -> Transformer a (Ar
 buffer flush = lift (Event.buffer (source flush))
 
 delay :: forall a. Int -> Transformer a a
-delay ms = lift (Event.delay ms)
-
-take :: forall a. Int -> Transformer a a
-take n = lift (Event.take n)
-
-drop :: forall a. Int -> Transformer a a
-drop n = lift (Event.drop n)
+delay ms = lift (Time.delay ms)

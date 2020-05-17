@@ -4,7 +4,7 @@ import Prelude
 import Control.Alt ((<|>))
 import Effect.Ref as Ref
 import Effect.Timer as Timer
-import Wire.Event (Event(..))
+import Wire.Event (Event)
 import Wire.Event as Event
 
 delay :: forall a. Int -> Event a -> Event a
@@ -21,7 +21,7 @@ delay ms event =
 
 interval :: Int -> Event Unit
 interval ms =
-  Event \emit -> do
+  Event.makeEvent \emit -> do
     intervalId <- Timer.setInterval ms do emit unit
     pure do Timer.clearInterval intervalId
 
