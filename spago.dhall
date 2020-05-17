@@ -7,6 +7,7 @@ You can edit this file as you like.
   [ "arrays"
   , "effect"
   , "filterable"
+  , "js-timers"
   , "profunctor"
   , "refs"
   , "unsafe-reference"
