@@ -37,8 +37,8 @@ instance profunctorTransformer :: Profunctor Transformer where
   dimap a2b c2d (Transformer t) = Transformer (map c2d <<< t <<< map a2b)
 
 instance choiceTransformer :: Choice Transformer where
-  left (Transformer t) = Transformer (separate >>> \event -> alt (map Left (t event.left)) (map Right event.right))
-  right (Transformer t) = Transformer (separate >>> \event -> alt (map Left event.left) (map Right (t event.right)))
+  left (Transformer t) = Transformer (separate >>> \event -> alt (Left <$> t event.left) (Right <$> event.right))
+  right (Transformer t) = Transformer (separate >>> \event -> alt (Left <$> event.left) (Right <$> t event.right))
 
 instance compactableTransformer :: Compactable (Transformer i) where
   compact (Transformer t) = Transformer (compact <<< t)

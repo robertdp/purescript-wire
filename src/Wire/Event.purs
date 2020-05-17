@@ -168,5 +168,5 @@ instance filterableEvent :: Filterable Event where
     { yes: filter f event
     , no: filter (not f) event
     }
-  filterMap f = map (unsafePartial fromJust) <<< filter isJust <<< map f
+  filterMap f = unsafePartial (map fromJust) <<< filter isJust <<< map f
   filter = filter
