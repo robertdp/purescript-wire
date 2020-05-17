@@ -115,13 +115,9 @@ timer after ms = delay after do pure unit <|> interval ms
 buffer :: forall a b. Event b -> Event a -> Event (Array a)
 buffer (Event flush) (Event event) =
   Event \emit -> do
-    internalBuffer <- Ref.new []
-    cancelFlush <-
-      flush \_ -> do
-        values <- Ref.read internalBuffer
-        Ref.write [] internalBuffer
-        emit values
-    cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) internalBuffer
+    values <- Ref.new []
+    cancelFlush <- flush \_ -> Ref.modify' (\value -> { state: [], value }) values >>= emit
+    cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) values
     pure do
       cancelEvent
       cancelFlush
