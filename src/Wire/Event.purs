@@ -6,7 +6,7 @@ import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
 import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
-import Data.Either (either, hush)
+import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
 import Data.Foldable (class Foldable, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
@@ -141,24 +141,15 @@ instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
 
 instance applyEvent :: Apply Event where
-  apply (Event eventF) (Event eventA) =
-    Event \emitB -> do
-      latestF <- liftEffect do Ref.new Nothing
-      latestA <- liftEffect do Ref.new Nothing
-      { cancelF, cancelA } <-
-        Aff.sequential ado
-          cancelF <-
-            Aff.parallel do
-              eventF \f -> do
-                liftEffect do Ref.write (Just f) latestF
-                liftEffect (Ref.read latestA) >>= traverse_ \a -> emitB (f a)
-          cancelA <-
-            Aff.parallel do
-              eventA \a -> do
-                liftEffect do Ref.write (Just a) latestA
-                liftEffect (Ref.read latestF) >>= traverse_ \f -> emitB (f a)
-          in { cancelF, cancelA }
-      pure do cancelF *> cancelA
+  apply eventF eventA =
+    alt (Left <$> eventF) (Right <$> eventA)
+      # fold
+          ( \{ left, right } -> case _ of
+              Left l -> { left: Just l, right }
+              Right r -> { left, right: Just r }
+          )
+          { left: Nothing, right: Nothing }
+      # filterMap (\{ left, right } -> apply left right)
 
 instance applicativeEvent :: Applicative Event where
   pure a = fromFoldable [ a ]
