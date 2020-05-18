@@ -110,13 +110,16 @@ distinct (Event event) =
         liftEffect do Ref.write (pure a) latest
         emit a
 
-bufferUntil :: forall a b. Event b -> Event a -> Event (Array a)
-bufferUntil (Event flush) (Event event) =
-  Event \emit -> do
-    buffer <- liftEffect do Ref.new []
-    cancelEvent <- event \a -> liftEffect do Ref.modify_ (flip Array.snoc a) buffer
-    cancelFlush <- flush \_ -> (liftEffect do Ref.modify' { state: [], value: _ } buffer) >>= emit
-    pure do cancelEvent *> cancelFlush
+bufferUntil :: forall b a. Event b -> Event a -> Event (Array a)
+bufferUntil flush source =
+  alt (Nothing <$ flush) (Just <$> source)
+    # fold
+        ( \{ buffer } -> case _ of
+            Nothing -> { buffer: [], output: Just buffer }
+            Just a -> { buffer: Array.snoc buffer a, output: Nothing }
+        )
+        { buffer: [], output: Nothing }
+    # filterMap _.output
 
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
