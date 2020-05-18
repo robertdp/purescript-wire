@@ -17,7 +17,6 @@ import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
-import Effect.Class.Console as Console
 import Effect.Ref as Ref
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
