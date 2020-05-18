@@ -13,6 +13,7 @@ You can edit this file as you like.
   , "js-timers"
   , "profunctor"
   , "refs"
+  , "strings"
   , "unsafe-reference"
   ]
 , packages = ./packages.dhall

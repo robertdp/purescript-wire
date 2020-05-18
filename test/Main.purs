@@ -1,8 +1,11 @@
 module Test.Main where
 
 import Prelude
+import Data.Array as Array
+import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Int as Int
 import Data.List.Lazy (range)
+import Data.String.CodeUnits as CodeUnits
 import Effect (Effect)
 import Effect.Aff (launchAff_)
 import Effect.Class.Console as Console
@@ -13,7 +16,7 @@ import Wire.Event.Time as Time
 main :: Effect Unit
 main =
   launchAff_ do
-    Event.subscribe sumFromOneToOneMillion Console.logShow
+    Event.subscribe sumFromOneToOneMillion do Console.log <<< formatNumber <<< show
 
 seconds :: Event Int
 seconds = Event.fold (\n _ -> n + 1) 0 do Time.timer 0 1000
@@ -24,3 +27,12 @@ sumFromOneToOneMillion =
     # Event.fromFoldable
     # map Int.toNumber
     # Event.fold (+) 0.0
+
+formatNumber :: String -> String
+formatNumber =
+  CodeUnits.dropRight 2
+    >>> CodeUnits.toCharArray
+    >>> Array.reverse
+    >>> foldlWithIndex (\i o c -> if i /= 0 && i `mod` 3 == 0 then o <> [ ',', c ] else o <> [ c ]) []
+    >>> Array.reverse
+    >>> CodeUnits.fromCharArray
