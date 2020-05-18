@@ -1,7 +1,7 @@
 module Wire.Signal where
 
 import Prelude
-import Effect.Aff (launchAff_)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
 import Wire.Event (Event)
@@ -14,7 +14,17 @@ type Signal m a
     , write :: a -> m Unit
     }
 
-create :: forall m a. MonadEffect m => a -> m (Signal m a)
+create ::
+  forall m n a.
+  MonadEffect m =>
+  MonadAff n =>
+  a ->
+  m
+    { event :: Event a
+    , modify :: (a -> a) -> n Unit
+    , read :: m a
+    , write :: a -> n Unit
+    }
 create init =
   liftEffect do
     value <- Ref.new init
@@ -24,7 +34,7 @@ create init =
 
       write a = modify (const a)
 
-      modify f = liftEffect do Ref.modify f value >>= (launchAff_ <<< inner.push)
+      modify f = liftAff do liftEffect (Ref.modify f value) >>= inner.push
 
       event =
         Event.makeEvent \emit -> do
