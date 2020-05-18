@@ -157,14 +157,13 @@ instance applicativeEvent :: Applicative Event where
 instance bindEvent :: Bind Event where
   bind (Event outer) f =
     Event \emit -> do
-      cancelInner <- liftEffect do Ref.new Nothing
+      cancelInner <- AffVar.empty
       cancelOuter <-
         outer \a -> do
-          (liftEffect do Ref.read cancelInner) >>= sequence_
-          cancel <- subscribe (f a) emit
-          liftEffect do Ref.write (Just cancel) cancelInner
+          join do AffVar.take cancelInner
+          subscribe (f a) emit >>= flip AffVar.put cancelInner
       pure do
-        (liftEffect do Ref.read cancelInner) >>= sequence_
+        join do AffVar.take cancelInner
         cancelOuter
 
 instance monadEvent :: Monad Event
