@@ -24,10 +24,10 @@ create init =
 
       write a = modify (const a)
 
-      modify f = liftEffect (Ref.modify f value) >>= inner.push
+      modify f = (liftEffect do Ref.modify f value) >>= inner.push
 
       event =
         Event.makeEvent \emit -> do
-          liftEffect (Ref.read value) >>= emit
+          (liftEffect do Ref.read value) >>= emit
           Event.subscribe inner.event emit
     pure { event, read, write, modify }

@@ -8,11 +8,12 @@ import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
 import Data.Either (either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
-import Data.Foldable (class Foldable, for_, sequence_, traverse_)
+import Data.Foldable (class Foldable, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect (Effect)
 import Effect.AVar as AVar
-import Effect.Aff (Aff, launchAff_, try)
+import Effect.Aff (Aff)
+import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
 import Effect.Class (liftEffect)
 import Effect.Exception as Exception
@@ -30,6 +31,11 @@ create :: forall a. Effect { event :: Event a, push :: a -> Aff Unit, cancel :: 
 create = do
   subscribers <- Ref.new []
   queue <- AVar.empty
+  fiber <-
+    Aff.launchAff do
+      forever do
+        a <- AffVar.take queue
+        (liftEffect do Ref.read subscribers) >>= traverse_ \k -> k a
   let
     event =
       Event \emit ->
@@ -45,11 +51,11 @@ create = do
 
     push a = AffVar.put a queue
 
-    cancel = liftEffect do AVar.kill (Exception.error "Cancelled") queue
-  (launchAff_ <<< forever) do
-    a <- AffVar.take queue
-    subs <- liftEffect do Ref.read subscribers
-    try do for_ subs \k -> k a
+    cancel = do
+      AVar.kill msg queue
+      Aff.launchAff_ do Aff.killFiber msg fiber
+      where
+      msg = Exception.error "cancelled"
   pure { event, push, cancel }
 
 makeEvent :: forall a. Subscribe a -> Event a
@@ -65,7 +71,7 @@ fold :: forall a b. (b -> a -> b) -> b -> Event a -> Event b
 fold f b (Event event) =
   Event \emit -> do
     accum <- liftEffect do Ref.new b
-    event \a -> liftEffect (Ref.modify (flip f a) accum) >>= emit
+    event \a -> (liftEffect do Ref.modify (flip f a) accum) >>= emit
 
 share :: forall a. Event a -> Effect (Event a)
 share source = do
@@ -82,7 +88,7 @@ share source = do
     decrementCount = do
       count <- liftEffect do Ref.modify (_ - 1) subscriberCount
       when (count == 0) do
-        liftEffect (Ref.read cancelSource) >>= sequence_
+        (liftEffect do Ref.read cancelSource) >>= sequence_
         liftEffect do Ref.write Nothing cancelSource
 
     event =
@@ -107,7 +113,7 @@ bufferUntil (Event flush) (Event event) =
   Event \emit -> do
     buffer <- liftEffect do Ref.new []
     cancelEvent <- event \a -> liftEffect do Ref.modify_ (flip Array.snoc a) buffer
-    cancelFlush <- flush \_ -> liftEffect (Ref.modify' { state: [], value: _ } buffer) >>= emit
+    cancelFlush <- flush \_ -> (liftEffect do Ref.modify' { state: [], value: _ } buffer) >>= emit
     pure do cancelEvent *> cancelFlush
 
 fromFoldable :: forall a f. Foldable f => f a -> Event a
@@ -124,11 +130,11 @@ instance applyEvent :: Apply Event where
       cancelF <-
         eventF \f -> do
           liftEffect do Ref.write (Just f) latestF
-          liftEffect (Ref.read latestA) >>= traverse_ \a -> emitB (f a)
+          (liftEffect do Ref.read latestA) >>= traverse_ \a -> emitB (f a)
       cancelA <-
         eventA \a -> do
           liftEffect do Ref.write (Just a) latestA
-          liftEffect (Ref.read latestF) >>= traverse_ \f -> emitB (f a)
+          (liftEffect do Ref.read latestF) >>= traverse_ \f -> emitB (f a)
       pure do cancelF *> cancelA
 
 instance applicativeEvent :: Applicative Event where
@@ -140,11 +146,11 @@ instance bindEvent :: Bind Event where
       cancelInner <- liftEffect do Ref.new Nothing
       cancelOuter <-
         outer \a -> do
-          liftEffect (Ref.read cancelInner) >>= sequence_
+          (liftEffect do Ref.read cancelInner) >>= sequence_
           cancel <- subscribe (f a) emit
           liftEffect do Ref.write (Just cancel) cancelInner
       pure do
-        liftEffect (Ref.read cancelInner) >>= sequence_
+        (liftEffect do Ref.read cancelInner) >>= sequence_
         cancelOuter
 
 instance monadEvent :: Monad Event
