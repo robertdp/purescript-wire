@@ -17,7 +17,7 @@ import Wire.Event.Time as Time
 main :: Effect Unit
 main =
   launchAff_ do
-    Event.subscribe (Event.distinct (sumFromOneToOneMillion <|> sumFromOneToOneMillion)) do Console.log <<< formatNumber <<< show
+    Event.subscribe (Event.distinct (sumFromOneToOneMillion <|> sumFromOneToOneMillion) >>= pure) do Console.log <<< formatNumber <<< show
 
 seconds :: Event Int
 seconds = Event.fold (\n _ -> n + 1) 0 do Time.timer 0 1000

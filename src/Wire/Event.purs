@@ -1,7 +1,6 @@
 module Wire.Event where
 
 import Prelude
-
 import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
@@ -18,6 +17,7 @@ import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Class.Console as Console
 import Effect.Ref as Ref
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
@@ -161,12 +161,12 @@ instance bindEvent :: Bind Event where
       cancelInner <- AffVar.empty
       cancelOuter <-
         outer \a -> do
-          join do AffVar.take cancelInner
+          AffVar.tryTake cancelInner >>= sequence_
           subscribe (f a) emit >>= flip AffVar.put cancelInner
       pure do
         Aff.sequential ado
           Aff.parallel do cancelOuter
-          Aff.parallel do join do AffVar.take cancelInner
+          Aff.parallel do AffVar.tryTake cancelInner >>= sequence_
           in unit
 
 instance monadEvent :: Monad Event
@@ -183,7 +183,10 @@ instance altEvent :: Alt Event where
         Aff.sequential ado
           cancel1 <- Aff.parallel do event1 emit
           cancel2 <- Aff.parallel do event2 emit
-          in cancel1 *> cancel2
+          in Aff.sequential ado
+            Aff.parallel cancel1
+            Aff.parallel cancel2
+            in unit
       pure do cancel
 
 instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
