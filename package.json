@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "spago build"
+    "build": "spago build",
+    "test": "spago test"
   },
   "author": "",
   "license": "ISC",

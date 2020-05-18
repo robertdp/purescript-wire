@@ -4,7 +4,10 @@ You can edit this file as you like.
 -}
 { name = "wire"
 , dependencies =
-  [ "arrays"
+  [ "aff"
+  , "arrays"
+  , "avar"
+  , "console"
   , "effect"
   , "filterable"
   , "js-timers"
