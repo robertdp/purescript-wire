@@ -1,6 +1,7 @@
 module Wire.Event where
 
 import Prelude
+
 import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
@@ -163,8 +164,10 @@ instance bindEvent :: Bind Event where
           join do AffVar.take cancelInner
           subscribe (f a) emit >>= flip AffVar.put cancelInner
       pure do
-        join do AffVar.take cancelInner
-        cancelOuter
+        Aff.sequential ado
+          Aff.parallel do cancelOuter
+          Aff.parallel do join do AffVar.take cancelInner
+          in unit
 
 instance monadEvent :: Monad Event
 
