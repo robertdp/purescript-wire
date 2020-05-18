@@ -27,7 +27,15 @@ newtype Event a
 type Subscribe a
   = (a -> Aff Unit) -> Aff (Aff Unit)
 
-create :: forall m n a. MonadEffect m => MonadAff n => m { event :: Event a, push :: a -> n Unit, cancel :: n Unit }
+create ::
+  forall effect aff a.
+  MonadEffect effect =>
+  MonadAff aff =>
+  effect
+    { event :: Event a
+    , push :: a -> aff Unit
+    , cancel :: aff Unit
+    }
 create =
   liftEffect do
     subscribers <- Ref.new []

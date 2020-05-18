@@ -15,15 +15,15 @@ type Signal m a
     }
 
 create ::
-  forall m n a.
-  MonadEffect m =>
-  MonadAff n =>
+  forall effect aff a.
+  MonadEffect effect =>
+  MonadAff aff =>
   a ->
-  m
+  effect
     { event :: Event a
-    , modify :: (a -> a) -> n Unit
-    , read :: m a
-    , write :: a -> n Unit
+    , modify :: (a -> a) -> aff Unit
+    , read :: effect a
+    , write :: a -> aff Unit
     }
 create init =
   liftEffect do
