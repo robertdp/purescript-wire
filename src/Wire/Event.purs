@@ -176,9 +176,12 @@ instance alternativeEvent :: Alternative Event
 instance altEvent :: Alt Event where
   alt (Event event1) (Event event2) =
     Event \emit -> do
-      cancel1 <- event1 emit
-      cancel2 <- event2 emit
-      pure do cancel1 *> cancel2
+      cancel <-
+        Aff.sequential ado
+          cancel1 <- Aff.parallel do event1 emit
+          cancel2 <- Aff.parallel do event2 emit
+          in cancel1 *> cancel2
+      pure do cancel
 
 instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
   append = lift2 append
