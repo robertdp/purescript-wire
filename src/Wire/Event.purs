@@ -15,8 +15,8 @@ import Effect.AVar as AVar
 import Effect.Aff (Aff)
 import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
-import Effect.Class (liftEffect)
-import Effect.Exception as Exception
+import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Ref as Ref
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
@@ -27,36 +27,40 @@ newtype Event a
 type Subscribe a
   = (a -> Aff Unit) -> Aff (Aff Unit)
 
-create :: forall a. Effect { event :: Event a, push :: a -> Aff Unit, cancel :: Effect Unit }
-create = do
-  subscribers <- Ref.new []
-  queue <- AVar.empty
-  fiber <-
-    Aff.launchAff do
-      forever do
-        a <- AffVar.take queue
-        (liftEffect do Ref.read subscribers) >>= traverse_ \k -> k a
-  let
-    event =
-      Event \emit ->
-        liftEffect do
-          unsubscribing <- Ref.new false
-          let
-            subscriber = \a -> unlessM (liftEffect do Ref.read unsubscribing) do emit a
-          Ref.modify_ (flip Array.snoc subscriber) subscribers
-          pure do
-            liftEffect do
-              Ref.write true unsubscribing
-              Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
+create :: forall m n a. MonadEffect m => MonadAff n => m { event :: Event a, push :: a -> n Unit, cancel :: n Unit }
+create =
+  liftEffect do
+    subscribers <- Ref.new []
+    queue <- AVar.empty
+    fiber <-
+      Aff.launchAff do
+        forever do
+          a <- AffVar.take queue
+          (liftEffect do Ref.read subscribers) >>= traverse_ \k -> k a
+    let
+      event =
+        Event \emit ->
+          liftEffect do
+            unsubscribing <- Ref.new false
+            let
+              subscriber = \a -> unlessM (liftEffect do Ref.read unsubscribing) do emit a
+            Ref.modify_ (flip Array.snoc subscriber) subscribers
+            pure do
+              liftEffect do
+                Ref.write true unsubscribing
+                Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
 
-    push a = AffVar.put a queue
+      push a = liftAff do AffVar.put a queue
 
-    cancel = do
-      AVar.kill msg queue
-      Aff.launchAff_ do Aff.killFiber msg fiber
-      where
-      msg = Exception.error "cancelled"
-  pure { event, push, cancel }
+      cancel =
+        liftAff do
+          Aff.sequential ado
+            Aff.parallel do AffVar.kill msg queue
+            Aff.parallel do Aff.killFiber msg fiber
+            in unit
+        where
+        msg = Aff.error "cancelled"
+    pure { event, push, cancel }
 
 makeEvent :: forall a. Subscribe a -> Event a
 makeEvent = Event
@@ -117,7 +121,13 @@ bufferUntil (Event flush) (Event event) =
     pure do cancelEvent *> cancelFlush
 
 fromFoldable :: forall a f. Foldable f => f a -> Event a
-fromFoldable xs = Event \emit -> traverse_ emit xs *> mempty
+fromFoldable xs =
+  Event \emit -> do
+    inner <- create
+    cancel <- subscribe inner.event emit
+    traverse_ inner.push xs
+    cancel *> inner.cancel
+    pure do cancel *> inner.cancel
 
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
@@ -127,14 +137,19 @@ instance applyEvent :: Apply Event where
     Event \emitB -> do
       latestF <- liftEffect do Ref.new Nothing
       latestA <- liftEffect do Ref.new Nothing
-      cancelF <-
-        eventF \f -> do
-          liftEffect do Ref.write (Just f) latestF
-          (liftEffect do Ref.read latestA) >>= traverse_ \a -> emitB (f a)
-      cancelA <-
-        eventA \a -> do
-          liftEffect do Ref.write (Just a) latestA
-          (liftEffect do Ref.read latestF) >>= traverse_ \f -> emitB (f a)
+      { cancelF, cancelA } <-
+        Aff.sequential ado
+          cancelF <-
+            Aff.parallel do
+              eventF \f -> do
+                liftEffect do Ref.write (Just f) latestF
+                liftEffect (Ref.read latestA) >>= traverse_ \a -> emitB (f a)
+          cancelA <-
+            Aff.parallel do
+              eventA \a -> do
+                liftEffect do Ref.write (Just a) latestA
+                liftEffect (Ref.read latestF) >>= traverse_ \f -> emitB (f a)
+          in { cancelF, cancelA }
       pure do cancelF *> cancelA
 
 instance applicativeEvent :: Applicative Event where
