@@ -1,7 +1,7 @@
 module Wire.Event where
 
 import Prelude
-import Control.Alt (class Alt)
+import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
 import Control.Monad.Rec.Class (forever)
@@ -55,11 +55,9 @@ create =
       cancel =
         liftAff do
           Aff.sequential ado
-            Aff.parallel do AffVar.kill msg queue
-            Aff.parallel do Aff.killFiber msg fiber
+            Aff.parallel do AffVar.kill (Aff.error "cancelled") queue
+            Aff.parallel do Aff.killFiber (Aff.error "cancelled") fiber
             in unit
-        where
-        msg = Aff.error "cancelled"
     pure { event, push, cancel }
 
 makeEvent :: forall a. Subscribe a -> Event a
@@ -125,9 +123,16 @@ fromFoldable xs =
   Event \emit -> do
     inner <- create
     cancel <- subscribe inner.event emit
-    traverse_ inner.push xs
-    cancel *> inner.cancel
-    pure do cancel *> inner.cancel
+    fiber <-
+      Aff.forkAff do
+        traverse_ inner.push xs
+        cancel *> inner.cancel
+    pure do
+      Aff.sequential ado
+        Aff.parallel do Aff.killFiber (Aff.error "cancelled") fiber
+        Aff.parallel do cancel
+        Aff.parallel do inner.cancel
+        in unit
 
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
@@ -153,7 +158,7 @@ instance applyEvent :: Apply Event where
       pure do cancelF *> cancelA
 
 instance applicativeEvent :: Applicative Event where
-  pure a = Event \emit -> emit a *> mempty
+  pure a = fromFoldable [ a ]
 
 instance bindEvent :: Bind Event where
   bind (Event outer) f =
