@@ -1,10 +1,10 @@
 module Wire.Event where
 
 import Prelude
-import Control.Alt (class Alt, alt)
+import Control.Alt (class Alt, alt, (<|>))
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
-import Control.Monad.Rec.Class (forever)
+import Control.Monad.Rec.Class (Step(..), forever, tailRecM)
 import Data.Array as Array
 import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
@@ -124,6 +124,28 @@ fromFoldable xs =
         for_ xs \x -> do
           liftEffect do emit x
           Aff.delay (Milliseconds 0.0)
+    pure do
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
+
+range :: Int -> Int -> Event Int
+range start end = pure start <|> fold (\pos _ -> pos + step) start (times diff)
+  where
+  step = if start < end then 1 else -1
+
+  diff = (end - start) * step
+
+times :: Int -> Event Unit
+times n =
+  Event \emit -> do
+    let
+      go n'
+        | n' > 0 = do
+          liftEffect do emit unit
+          Aff.delay (Milliseconds 0.0)
+          pure (Loop (n' - 1))
+
+      go _ = pure (Done unit)
+    fiber <- Aff.launchAff do tailRecM go n
     pure do
       Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 
