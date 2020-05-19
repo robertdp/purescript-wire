@@ -2,28 +2,36 @@ module Wire.Event.Time where
 
 import Prelude
 import Control.Alt ((<|>))
-import Effect.Ref as Ref
-import Effect.Timer as Timer
+import Control.Monad.Rec.Class (forever)
+import Data.Time.Duration (class Duration, fromDuration)
+import Effect.Aff as Aff
+import Effect.Class (liftEffect)
 import Wire.Event (Event)
 import Wire.Event as Event
+import Wire.Event.Queue as Queue
 
-delay :: forall a. Int -> Event a -> Event a
-delay ms event =
+delay :: forall offset a. Duration offset => offset -> Event a -> Event a
+delay offset event = do
+  let
+    ms = fromDuration offset
   Event.makeEvent \emit -> do
-    canceled <- Ref.new false
-    cancel <-
-      Event.subscribe event \a -> do
-        _ <- Timer.setTimeout ms do unlessM (Ref.read canceled) do emit a
-        pure unit
+    queue <- Queue.create emit
+    cancel <- Event.subscribe event \a -> queue.push do Aff.delay ms *> pure a
     pure do
-      Ref.write true canceled
       cancel
+      queue.kill
 
-interval :: Int -> Event Unit
-interval ms =
+interval :: forall spacing. Duration spacing => spacing -> Event Unit
+interval spacing = do
+  let
+    ms = fromDuration spacing
   Event.makeEvent \emit -> do
-    intervalId <- Timer.setInterval ms do emit unit
-    pure do Timer.clearInterval intervalId
+    fiber <-
+      (Aff.launchAff <<< forever) do
+        Aff.delay ms
+        liftEffect do emit unit
+    pure do
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling") fiber
 
-timer :: Int -> Int -> Event Unit
-timer after ms = delay after do pure unit <|> interval ms
+timer :: forall offset spacing. Duration offset => Duration spacing => offset -> spacing -> Event Unit
+timer offset spacing = delay offset do pure unit <|> interval spacing

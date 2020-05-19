@@ -5,11 +5,12 @@ You can edit this file as you like.
 { name = "wire"
 , dependencies =
   [ "arrays"
-  , "effect"
+  , "avar"
+  , "console"
   , "filterable"
-  , "js-timers"
   , "profunctor"
   , "refs"
+  , "strings"
   , "unsafe-reference"
   ]
 , packages = ./packages.dhall

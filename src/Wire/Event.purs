@@ -1,31 +1,37 @@
 module Wire.Event where
 
 import Prelude
-import Control.Alt (class Alt)
-import Control.Alternative (class Alternative, class Plus)
+import Control.Alt (class Alt, alt)
+import Control.Alternative (class Alternative, class Plus, empty)
 import Control.Apply (lift2)
+import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Data.Array as Array
-import Data.Either (either, hush)
+import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
-import Data.Foldable (class Foldable, sequence_, traverse_)
+import Data.Foldable (class Foldable, for_, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect (Effect)
+import Effect.Aff (Milliseconds(..))
+import Effect.Aff as Aff
+import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
+import Wire.Event.Queue as Queue
 
 newtype Event a
-  = Event (Subscribe a)
+  = Event (Subscriber a -> Effect Canceller)
 
-type Subscribe a
-  = (a -> Effect Unit) -> Effect Canceler
+type Subscriber a
+  = a -> Effect Unit
 
-type Canceler
+type Canceller
   = Effect Unit
 
-create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit }
+create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit, cancel :: Effect Unit }
 create = do
   subscribers <- Ref.new []
+  queue <- Queue.create \a -> Ref.read subscribers >>= traverse_ \k -> k a
   let
     event =
       Event \emit -> do
@@ -36,14 +42,12 @@ create = do
         pure do
           Ref.write true unsubscribing
           Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
+  pure { event, push: (queue.push <<< pure), cancel: queue.kill }
 
-    push a = Ref.read subscribers >>= traverse_ \emit -> emit a
-  pure { event, push }
-
-makeEvent :: forall a. Subscribe a -> Event a
+makeEvent :: forall a. (Subscriber a -> Effect Canceller) -> Event a
 makeEvent = Event
 
-subscribe :: forall a. Event a -> Subscribe a
+subscribe :: forall a. Event a -> Subscriber a -> Effect Canceller
 subscribe (Event event) = event
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a
@@ -62,16 +66,16 @@ share source = do
   shared <- create
   let
     incrementCount = do
-      count <- Ref.modify (_ + 1) subscriberCount
+      count <- liftEffect do Ref.modify (_ + 1) subscriberCount
       when (count == 1) do
-        cancel <- subscribe source shared.push
-        Ref.write (Just cancel) cancelSource
+        cancel <- subscribe source do liftEffect <<< shared.push
+        liftEffect do Ref.write (Just cancel) cancelSource
 
     decrementCount = do
-      count <- Ref.modify (_ - 1) subscriberCount
+      count <- liftEffect do Ref.modify (_ - 1) subscriberCount
       when (count == 0) do
-        Ref.read cancelSource >>= sequence_
-        Ref.write Nothing cancelSource
+        liftEffect (Ref.read cancelSource) >>= sequence_
+        liftEffect do Ref.write Nothing cancelSource
 
     event =
       Event \emit -> do
@@ -90,34 +94,72 @@ distinct (Event event) =
         Ref.write (pure a) latest
         emit a
 
-bufferUntil :: forall a b. Event b -> Event a -> Event (Array a)
-bufferUntil (Event flush) (Event event) =
-  Event \emit -> do
-    buffer <- Ref.new []
-    cancelEvent <- event \a -> Ref.modify_ (flip Array.snoc a) buffer
-    cancelFlush <- flush \_ -> Ref.modify' { state: [], value: _ } buffer >>= emit
-    pure do cancelEvent *> cancelFlush
+bufferUntil :: forall b a. Event b -> Event a -> Event (Array a)
+bufferUntil flush source =
+  alt (Nothing <$ flush) (Just <$> source)
+    # fold
+        ( \{ buffer } -> case _ of
+            Nothing -> { buffer: [], output: Just buffer }
+            Just a -> { buffer: Array.snoc buffer a, output: Nothing }
+        )
+        { buffer: [], output: Nothing }
+    # filterMap _.output
 
 fromFoldable :: forall a f. Foldable f => f a -> Event a
-fromFoldable xs = Event \emit -> traverse_ emit xs *> mempty
+fromFoldable xs =
+  Event \emit -> do
+    fiber <-
+      Aff.launchAff do
+        for_ xs \x -> do
+          liftEffect do emit x
+          Aff.delay (Milliseconds 0.0)
+    pure do
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
+
+range :: Int -> Int -> Event Int
+range start end =
+  Event \emit -> do
+    let
+      go pos
+        | pos /= end = do
+          liftEffect do emit pos
+          Aff.delay (Milliseconds 0.0)
+          pure (Loop (pos + step))
+
+      go _ = do
+        liftEffect do emit end
+        pure (Done unit)
+    fiber <- Aff.launchAff do tailRecM go start
+    pure do
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
+  where
+  step = if start < end then 1 else -1
+
+times :: Int -> Event Int
+times n
+  | n > 0 = range 1 n
+
+times _ = empty
 
 instance functorEvent :: Functor Event where
-  map f (Event event) = Event \emit -> event \a -> emit (f a)
+  map f (Event event) =
+    Event \emit -> do
+      queue <- Queue.create (emit <<< f)
+      cancel <- event (queue.push <<< pure)
+      pure do
+        cancel
+        queue.kill
 
 instance applyEvent :: Apply Event where
-  apply (Event eventF) (Event eventA) =
-    Event \emitB -> do
-      latestF <- Ref.new Nothing
-      latestA <- Ref.new Nothing
-      cancelF <-
-        eventF \f -> do
-          Ref.write (Just f) latestF
-          Ref.read latestA >>= traverse_ \a -> emitB (f a)
-      cancelA <-
-        eventA \a -> do
-          Ref.write (Just a) latestA
-          Ref.read latestF >>= traverse_ \f -> emitB (f a)
-      pure do cancelF *> cancelA
+  apply eventF eventA =
+    alt (Left <$> eventF) (Right <$> eventA)
+      # fold
+          ( \{ left, right } -> case _ of
+              Left l -> { left: Just l, right }
+              Right r -> { left, right: Just r }
+          )
+          { left: Nothing, right: Nothing }
+      # filterMap (\{ left, right } -> apply left right)
 
 instance applicativeEvent :: Applicative Event where
   pure a = Event \emit -> emit a *> mempty
@@ -127,10 +169,11 @@ instance bindEvent :: Bind Event where
     Event \emit -> do
       cancelInner <- Ref.new Nothing
       cancelOuter <-
-        outer \a -> do
-          Ref.read cancelInner >>= sequence_
-          cancel <- subscribe (f a) emit
-          Ref.write (Just cancel) cancelInner
+        outer \a ->
+          liftEffect do
+            Ref.read cancelInner >>= sequence_
+            cancel <- subscribe (f a) emit
+            Ref.write (Just cancel) cancelInner
       pure do
         Ref.read cancelInner >>= sequence_
         cancelOuter
