@@ -20,10 +20,13 @@ import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
 
 newtype Event a
-  = Event (Subscribe a)
+  = Event (Subscriber a -> Effect Canceller)
 
-type Subscribe a
-  = (a -> Effect Unit) -> Effect (Effect Unit)
+type Subscriber a
+  = a -> Effect Unit
+
+type Canceller
+  = Effect Unit
 
 create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit, cancel :: Effect Unit }
 create = do
@@ -51,10 +54,10 @@ create = do
       AVar.kill (Aff.error "cancelled") queue
   pure { event, push, cancel }
 
-makeEvent :: forall a. Subscribe a -> Event a
+makeEvent :: forall a. (Subscriber a -> Effect Canceller) -> Event a
 makeEvent = Event
 
-subscribe :: forall a. Event a -> Subscribe a
+subscribe :: forall a. Event a -> Subscriber a -> Effect Canceller
 subscribe (Event event) = event
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a
