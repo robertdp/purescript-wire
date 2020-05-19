@@ -2,7 +2,7 @@ module Wire.Event where
 
 import Prelude
 import Control.Alt (class Alt, alt, (<|>))
-import Control.Alternative (class Alternative, class Plus)
+import Control.Alternative (class Alternative, class Plus, empty)
 import Control.Apply (lift2)
 import Control.Monad.Rec.Class (Step(..), forever, tailRecM)
 import Data.Array as Array
@@ -128,26 +128,28 @@ fromFoldable xs =
       Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 
 range :: Int -> Int -> Event Int
-range start end = pure start <|> fold (\pos _ -> pos + step) start (times diff)
+range start end =
+  Event \emit -> do
+    let
+      go pos
+        | pos /= end = do
+          liftEffect do emit pos
+          pure (Loop (pos + step))
+
+      go _ = do
+        liftEffect do emit end
+        pure (Done unit)
+    fiber <- Aff.launchAff do tailRecM go start
+    pure do
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
   where
   step = if start < end then 1 else -1
 
-  diff = (end - start) * step
+times :: Int -> Event Int
+times n
+  | n > 0 = range 1 n
 
-times :: Int -> Event Unit
-times n =
-  Event \emit -> do
-    let
-      go n'
-        | n' > 0 = do
-          liftEffect do emit unit
-          Aff.delay (Milliseconds 0.0)
-          pure (Loop (n' - 1))
-
-      go _ = pure (Done unit)
-    fiber <- Aff.launchAff do tailRecM go n
-    pure do
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
+times _ = empty
 
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
