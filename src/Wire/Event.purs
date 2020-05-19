@@ -66,8 +66,8 @@ filter f (Event event) = Event \emit -> event \a -> when (f a) (emit a)
 fold :: forall a b. (b -> a -> b) -> b -> Event a -> Event b
 fold f b (Event event) =
   Event \emit -> do
-    accum <- liftEffect do Ref.new b
-    event \a -> liftEffect (Ref.modify (flip f a) accum) >>= emit
+    accum <- Ref.new b
+    event \a -> Ref.modify (flip f a) accum >>= emit
 
 share :: forall a. Event a -> Effect (Event a)
 share source = do
@@ -97,11 +97,11 @@ share source = do
 distinct :: forall a. Eq a => Event a -> Event a
 distinct (Event event) =
   Event \emit -> do
-    latest <- liftEffect do Ref.new Nothing
+    latest <- Ref.new Nothing
     event \a -> do
-      b <- liftEffect do Ref.read latest
+      b <- Ref.read latest
       when (pure a /= b) do
-        liftEffect do Ref.write (pure a) latest
+        Ref.write (pure a) latest
         emit a
 
 bufferUntil :: forall b a. Event b -> Event a -> Event (Array a)
