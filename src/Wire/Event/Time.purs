@@ -16,11 +16,7 @@ delay offset event = do
     ms = fromDuration offset
   Event.makeEvent \emit -> do
     queue <- Queue.create emit
-    cancel <-
-      Event.subscribe event \a ->
-        Aff.launchAff_ do
-          Aff.delay ms
-          liftEffect do queue.push a
+    cancel <- Event.subscribe event \a -> queue.push do Aff.delay ms *> pure a
     pure do
       cancel
       queue.kill
