@@ -11,6 +11,7 @@ type Signal a
     , modify :: (a -> a) -> Effect Unit
     , read :: Effect a
     , write :: a -> Effect Unit
+    , cancel :: Effect Unit
     }
 
 create :: forall a. a -> Effect (Signal a)
@@ -28,4 +29,4 @@ create init = do
       Event.makeEvent \emit -> do
         Ref.read value >>= emit
         Event.subscribe inner.event emit
-  pure { event, read, write, modify }
+  pure { event, read, write, modify, cancel: inner.cancel }
