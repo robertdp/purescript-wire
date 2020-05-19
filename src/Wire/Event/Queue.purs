@@ -5,7 +5,6 @@ import Control.Monad.Rec.Class (forever)
 import Effect (Effect)
 import Effect.AVar as AVar
 import Effect.Aff (Aff)
-import Effect.Aff as AFf
 import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
 import Effect.Class (liftEffect)
@@ -19,7 +18,7 @@ create consumer = do
       a <- aff
       liftEffect do consumer a
   let
-    killFiber = Aff.launchAff_ do AFf.killFiber (Aff.error "killing queue consumer") fiber
+    killFiber = Aff.launchAff_ do Aff.killFiber (Aff.error "killing queue consumer") fiber
 
     killQueue = AVar.kill (Aff.error "killing queue") queue
   pure
