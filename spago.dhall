@@ -4,16 +4,12 @@ You can edit this file as you like.
 -}
 { name = "wire"
 , dependencies =
-  [ "aff"
-  , "arrays"
+  [ "arrays"
   , "avar"
-  , "console"
-  , "effect"
   , "filterable"
   , "js-timers"
   , "profunctor"
   , "refs"
-  , "strings"
   , "unsafe-reference"
   ]
 , packages = ./packages.dhall
