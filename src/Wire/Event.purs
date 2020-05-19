@@ -42,7 +42,7 @@ create = do
         pure do
           Ref.write true unsubscribing
           Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
-  pure { event, push: (queue.push <<< pure), cancel: queue.kill }
+  pure { event, push: queue.push, cancel: queue.kill }
 
 makeEvent :: forall a. (Subscriber a -> Effect Canceller) -> Event a
 makeEvent = Event
@@ -145,7 +145,7 @@ instance functorEvent :: Functor Event where
   map f (Event event) =
     Event \emit -> do
       queue <- Queue.create (emit <<< f)
-      cancel <- event (queue.push <<< pure)
+      cancel <- event queue.push
       pure do
         cancel
         queue.kill
