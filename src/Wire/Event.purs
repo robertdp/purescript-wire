@@ -122,8 +122,8 @@ fromFoldable xs =
     fiber <-
       Aff.launchAff do
         for_ xs \x -> do
-          Aff.delay (Milliseconds 0.0)
           liftEffect do emit x
+          Aff.delay (Milliseconds 0.0)
     pure do
       Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 
