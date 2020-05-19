@@ -39,7 +39,7 @@ create = do
       Event \emit -> do
         unsubscribing <- Ref.new false
         let
-          subscriber = \a -> unlessM (Ref.read unsubscribing) do Aff.launchAff_ do emit a
+          subscriber = \a -> unlessM (Ref.read unsubscribing) do Aff.launchAff_ (emit a)
         Ref.modify_ (flip Array.snoc subscriber) subscribers
         pure do
           Ref.write true unsubscribing
@@ -65,7 +65,7 @@ fold :: forall a b. (b -> a -> b) -> b -> Event a -> Event b
 fold f b (Event event) =
   Event \emit -> do
     accum <- liftEffect do Ref.new b
-    event \a -> (liftEffect do Ref.modify (flip f a) accum) >>= emit
+    event \a -> liftEffect (Ref.modify (flip f a) accum) >>= emit
 
 share :: forall a. Event a -> Effect (Event a)
 share source = do
@@ -82,7 +82,7 @@ share source = do
     decrementCount = do
       count <- liftEffect do Ref.modify (_ - 1) subscriberCount
       when (count == 0) do
-        (liftEffect do Ref.read cancelSource) >>= sequence_
+        liftEffect  (Ref.read cancelSource) >>= sequence_
         liftEffect do Ref.write Nothing cancelSource
 
     event =
