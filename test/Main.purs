@@ -1,11 +1,9 @@
 module Test.Main where
 
 import Prelude
-import Control.Alt ((<|>))
 import Data.Array as Array
 import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Int as Int
-import Data.List.Lazy (range)
 import Data.String.CodeUnits as CodeUnits
 import Effect (Effect)
 import Effect.Class.Console as Console
@@ -14,13 +12,13 @@ import Wire.Event as Event
 
 main :: Effect Unit
 main = do
-  void $ Event.subscribe (Event.distinct (sumFromOneToOneHundred <|> sumFromOneToOneHundred) >>= pure <<< formatNumber <<< show) do Console.log
+  void $ Event.subscribe ((\a b -> "Hi " <> show (a + b)) <$> Event.range 1 5 <*> (Event.range 6 10 >>= pure)) do Console.logShow
 
-sumFromOneToOneHundred :: Event Number
-sumFromOneToOneHundred =
-  range 1 100
-    # Event.fromFoldable
+sumOfSquaresFromOneToOneThousand :: Event Number
+sumOfSquaresFromOneToOneThousand =
+  Event.range 1 1_000
     # map Int.toNumber
+    # map (\x -> x * x)
     # Event.fold (+) 0.0
 
 formatNumber :: String -> String
