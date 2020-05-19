@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "spago build",
-    "test": "spago test"
+    "test": "spago --config spago.test.dhall test"
   },
   "author": "",
   "license": "ISC",
