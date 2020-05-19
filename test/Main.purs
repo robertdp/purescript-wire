@@ -7,20 +7,16 @@ import Data.FoldableWithIndex (foldlWithIndex)
 import Data.Int as Int
 import Data.List.Lazy (range)
 import Data.String.CodeUnits as CodeUnits
+import Data.Time.Duration (Seconds(..))
 import Effect (Effect)
-import Effect.Aff (launchAff_)
 import Effect.Class.Console as Console
 import Wire.Event (Event)
 import Wire.Event as Event
 import Wire.Event.Time as Time
 
 main :: Effect Unit
-main =
-  launchAff_ do
-    Event.subscribe (Event.distinct (sumFromOneToOneMillion <|> sumFromOneToOneMillion) >>= pure) do Console.log <<< formatNumber <<< show
-
-seconds :: Event Int
-seconds = Event.fold (\n _ -> n + 1) 0 do Time.timer 0 1000
+main = do
+  void $ Event.subscribe (Time.timer (Seconds 0.1) (Seconds 1.0)) do Console.log <<< show
 
 sumFromOneToOneMillion :: Event Number
 sumFromOneToOneMillion =

@@ -5,7 +5,6 @@ import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
 import Control.Monad.Rec.Class (forever)
-import Control.Parallel (parSequence_)
 import Data.Array as Array
 import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
@@ -16,8 +15,7 @@ import Effect.AVar as AVar
 import Effect.Aff (Aff)
 import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
-import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Class (class MonadEffect, liftEffect)
+import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
@@ -26,48 +24,33 @@ newtype Event a
   = Event (Subscribe a)
 
 type Subscribe a
-  = (a -> Aff Unit) -> Aff (Aff Unit)
+  = (a -> Aff Unit) -> Effect (Effect Unit)
 
-create ::
-  forall effect aff a.
-  MonadEffect effect =>
-  MonadAff aff =>
-  effect
-    { event :: Event a
-    , push :: a -> aff Unit
-    , cancel :: aff Unit
-    }
-create =
-  liftEffect do
-    subscribers <- Ref.new []
-    queue <- AVar.empty
-    fiber <-
-      Aff.launchAff do
-        forever do
-          a <- AffVar.take queue
-          (liftEffect do Ref.read subscribers) >>= traverse_ \k -> k a
-    let
-      event =
-        Event \emit ->
-          liftEffect do
-            unsubscribing <- Ref.new false
-            let
-              subscriber = \a -> unlessM (liftEffect do Ref.read unsubscribing) do emit a
-            Ref.modify_ (flip Array.snoc subscriber) subscribers
-            pure do
-              liftEffect do
-                Ref.write true unsubscribing
-                Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
+create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit, cancel :: Effect Unit }
+create = do
+  subscribers <- Ref.new []
+  queue <- AVar.empty
+  consumer <-
+    (Aff.launchAff <<< Aff.attempt <<< forever) do
+      a <- AffVar.take queue
+      liftEffect do Ref.read subscribers >>= traverse_ \k -> k a
+  let
+    event =
+      Event \emit -> do
+        unsubscribing <- Ref.new false
+        let
+          subscriber = \a -> unlessM (Ref.read unsubscribing) do Aff.launchAff_ do emit a
+        Ref.modify_ (flip Array.snoc subscriber) subscribers
+        pure do
+          Ref.write true unsubscribing
+          Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
 
-      push a = liftAff do AffVar.put a queue
+    push a = Aff.launchAff_ do AffVar.put a queue
 
-      cancel =
-        liftAff do
-          parSequence_
-            [ AffVar.kill (Aff.error "cancelled") queue
-            , Aff.killFiber (Aff.error "cancelled") fiber
-            ]
-    pure { event, push, cancel }
+    cancel = do
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") consumer
+      AVar.kill (Aff.error "cancelled") queue
+  pure { event, push, cancel }
 
 makeEvent :: forall a. Subscribe a -> Event a
 makeEvent = Event
@@ -93,7 +76,7 @@ share source = do
     incrementCount = do
       count <- liftEffect do Ref.modify (_ + 1) subscriberCount
       when (count == 1) do
-        cancel <- subscribe source shared.push
+        cancel <- subscribe source do liftEffect <<< shared.push
         liftEffect do Ref.write (Just cancel) cancelSource
 
     decrementCount = do
@@ -133,11 +116,9 @@ bufferUntil flush source =
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
   Event \emit -> do
-    fiber <-
-      Aff.forkAff do
-        traverse_ emit xs
+    fiber <- Aff.launchAff do traverse_ emit xs
     pure do
-      Aff.killFiber (Aff.error "cancelled") fiber
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
@@ -154,21 +135,24 @@ instance applyEvent :: Apply Event where
       # filterMap (\{ left, right } -> apply left right)
 
 instance applicativeEvent :: Applicative Event where
-  pure a = Event \emit -> emit a *> mempty
+  pure a =
+    Event \emit -> do
+      Aff.launchAff_ do emit a
+      mempty
 
 instance bindEvent :: Bind Event where
   bind (Event outer) f =
     Event \emit -> do
-      cancelInner <- AffVar.empty
+      cancelInner <- Ref.new Nothing
       cancelOuter <-
-        outer \a -> do
-          AffVar.tryTake cancelInner >>= sequence_
-          subscribe (f a) emit >>= flip AffVar.put cancelInner
+        outer \a ->
+          liftEffect do
+            Ref.read cancelInner >>= sequence_
+            cancel <- subscribe (f a) emit
+            Ref.write (Just cancel) cancelInner
       pure do
-        parSequence_
-          [ cancelOuter
-          , AffVar.tryTake cancelInner >>= sequence_
-          ]
+        Ref.read cancelInner >>= sequence_
+        cancelOuter
 
 instance monadEvent :: Monad Event
 
@@ -180,12 +164,9 @@ instance alternativeEvent :: Alternative Event
 instance altEvent :: Alt Event where
   alt (Event event1) (Event event2) =
     Event \emit -> do
-      cancel <-
-        Aff.sequential ado
-          cancel1 <- Aff.parallel do event1 emit
-          cancel2 <- Aff.parallel do event2 emit
-          in parSequence_ [ cancel1, cancel2 ]
-      pure do cancel
+      cancel1 <- event1 emit
+      cancel2 <- event2 emit
+      pure do cancel1 *> cancel2
 
 instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
   append = lift2 append

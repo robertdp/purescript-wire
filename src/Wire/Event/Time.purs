@@ -3,30 +3,39 @@ module Wire.Event.Time where
 import Prelude
 import Control.Alt ((<|>))
 import Control.Monad.Rec.Class (forever)
-import Effect.Aff (Milliseconds)
+import Data.Time.Duration (class Duration, fromDuration)
 import Effect.Aff as Aff
+import Effect.Class (liftEffect)
+import Effect.Ref as Ref
 import Wire.Event (Event)
 import Wire.Event as Event
 
-delay :: forall a. Milliseconds -> Event a -> Event a
-delay ms event =
+delay :: forall offset a. Duration offset => offset -> Event a -> Event a
+delay offset event = do
+  let
+    ms = fromDuration offset
   Event.makeEvent \emit -> do
+    cancelled <- Ref.new false
     cancel <-
       Event.subscribe event \a -> do
-        Aff.delay ms
-        emit a
-    pure cancel
+        unlessM (liftEffect do Ref.read cancelled) do
+          Aff.delay ms
+          emit a
+    pure do
+      Ref.write true cancelled
+      cancel
 
-interval :: Milliseconds -> Event Unit
-interval ms =
+interval :: forall spacing. Duration spacing => spacing -> Event Unit
+interval spacing = do
+  let
+    ms = fromDuration spacing
   Event.makeEvent \emit -> do
     fiber <-
-      Aff.forkAff do
-        forever do
-          Aff.delay ms
-          emit unit
+      (Aff.launchAff <<< forever) do
+        Aff.delay ms
+        emit unit
     pure do
-      Aff.killFiber (Aff.error "cancelling") fiber
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling") fiber
 
-timer :: Milliseconds -> Milliseconds -> Event Unit
-timer after ms = delay after do pure unit <|> interval ms
+timer :: forall offset spacing. Duration offset => Duration spacing => offset -> spacing -> Event Unit
+timer offset spacing = delay offset do pure unit <|> interval spacing
