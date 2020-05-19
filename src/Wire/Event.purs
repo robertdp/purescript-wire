@@ -8,10 +8,11 @@ import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
 import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
-import Data.Foldable (class Foldable, sequence_, traverse_)
+import Data.Foldable (class Foldable, for_, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect (Effect)
 import Effect.AVar as AVar
+import Effect.Aff (Milliseconds(..))
 import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
 import Effect.Class (liftEffect)
@@ -33,7 +34,7 @@ create = do
   subscribers <- Ref.new []
   queue <- AVar.empty
   consumer <-
-    (Aff.launchAff <<< forever) do
+    (Aff.launchAff <<< Aff.attempt <<< forever) do
       a <- AffVar.take queue
       liftEffect do Ref.read subscribers >>= traverse_ \k -> k a
   let
@@ -118,7 +119,11 @@ bufferUntil flush source =
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
   Event \emit -> do
-    fiber <- Aff.launchAff do traverse_ (liftEffect <<< emit) xs
+    fiber <-
+      Aff.launchAff do
+        for_ xs \x -> do
+          Aff.delay (Milliseconds 0.0)
+          liftEffect do emit x
     pure do
       Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 

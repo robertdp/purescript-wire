@@ -14,11 +14,11 @@ import Wire.Event as Event
 
 main :: Effect Unit
 main = do
-  void $ Event.subscribe (Event.distinct (sumFromOneToOneMillion <|> sumFromOneToOneMillion) >>= pure <<< formatNumber <<< show) do Console.log
+  void $ Event.subscribe (Event.distinct (sumFromOneToOneHundred <|> sumFromOneToOneHundred) >>= pure <<< formatNumber <<< show) do Console.log
 
-sumFromOneToOneMillion :: Event Number
-sumFromOneToOneMillion =
-  range 1 1_000_000
+sumFromOneToOneHundred :: Event Number
+sumFromOneToOneHundred =
+  range 1 100
     # Event.fromFoldable
     # map Int.toNumber
     # Event.fold (+) 0.0
