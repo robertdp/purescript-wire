@@ -5,6 +5,7 @@ import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus)
 import Control.Apply (lift2)
 import Control.Monad.Rec.Class (forever)
+import Control.Parallel (parSequence_)
 import Data.Array as Array
 import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
@@ -62,10 +63,10 @@ create =
 
       cancel =
         liftAff do
-          Aff.sequential ado
-            Aff.parallel do AffVar.kill (Aff.error "cancelled") queue
-            Aff.parallel do Aff.killFiber (Aff.error "cancelled") fiber
-            in unit
+          parSequence_
+            [ AffVar.kill (Aff.error "cancelled") queue
+            , Aff.killFiber (Aff.error "cancelled") fiber
+            ]
     pure { event, push, cancel }
 
 makeEvent :: forall a. Subscribe a -> Event a
@@ -132,18 +133,11 @@ bufferUntil flush source =
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
   Event \emit -> do
-    inner <- create
-    cancel <- subscribe inner.event emit
     fiber <-
       Aff.forkAff do
-        traverse_ inner.push xs
-        cancel *> inner.cancel
+        traverse_ emit xs
     pure do
-      Aff.sequential ado
-        Aff.parallel do Aff.killFiber (Aff.error "cancelled") fiber
-        Aff.parallel do cancel
-        Aff.parallel do inner.cancel
-        in unit
+      Aff.killFiber (Aff.error "cancelled") fiber
 
 instance functorEvent :: Functor Event where
   map f (Event event) = Event \emit -> event \a -> emit (f a)
@@ -160,7 +154,7 @@ instance applyEvent :: Apply Event where
       # filterMap (\{ left, right } -> apply left right)
 
 instance applicativeEvent :: Applicative Event where
-  pure a = fromFoldable [ a ]
+  pure a = Event \emit -> emit a *> mempty
 
 instance bindEvent :: Bind Event where
   bind (Event outer) f =
@@ -171,10 +165,10 @@ instance bindEvent :: Bind Event where
           AffVar.tryTake cancelInner >>= sequence_
           subscribe (f a) emit >>= flip AffVar.put cancelInner
       pure do
-        Aff.sequential ado
-          Aff.parallel do cancelOuter
-          Aff.parallel do AffVar.tryTake cancelInner >>= sequence_
-          in unit
+        parSequence_
+          [ cancelOuter
+          , AffVar.tryTake cancelInner >>= sequence_
+          ]
 
 instance monadEvent :: Monad Event
 
@@ -190,10 +184,7 @@ instance altEvent :: Alt Event where
         Aff.sequential ado
           cancel1 <- Aff.parallel do event1 emit
           cancel2 <- Aff.parallel do event2 emit
-          in Aff.sequential ado
-            Aff.parallel cancel1
-            Aff.parallel cancel2
-            in unit
+          in parSequence_ [ cancel1, cancel2 ]
       pure do cancel
 
 instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
