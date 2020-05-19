@@ -33,7 +33,7 @@ create = do
   subscribers <- Ref.new []
   queue <- AVar.empty
   consumer <-
-    (Aff.launchAff <<< Aff.attempt <<< forever) do
+    (Aff.launchAff <<< forever) do
       a <- AffVar.take queue
       liftEffect do Ref.read subscribers >>= traverse_ \k -> k a
   let
