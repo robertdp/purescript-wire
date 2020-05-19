@@ -4,9 +4,10 @@ import Prelude
 import Control.Alt ((<|>))
 import Control.Monad.Rec.Class (forever)
 import Data.Time.Duration (class Duration, fromDuration)
+import Effect.AVar as AVar
 import Effect.Aff as Aff
+import Effect.Aff.AVar as AffVar
 import Effect.Class (liftEffect)
-import Effect.Ref as Ref
 import Wire.Event (Event)
 import Wire.Event as Event
 
@@ -15,15 +16,20 @@ delay offset event = do
   let
     ms = fromDuration offset
   Event.makeEvent \emit -> do
-    cancelled <- Ref.new false
+    queue <- AVar.empty
+    consumer <-
+      (Aff.launchAff <<< forever) do
+        a <- AffVar.take queue
+        liftEffect do emit a
     cancel <-
-      Event.subscribe event \a -> do
-        unlessM (liftEffect do Ref.read cancelled) do
+      Event.subscribe event \a ->
+        Aff.launchAff_ do
           Aff.delay ms
-          emit a
+          AffVar.put a queue
     pure do
-      Ref.write true cancelled
       cancel
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling delay") consumer
+      AVar.kill (Aff.error "cancelling delay") queue
 
 interval :: forall spacing. Duration spacing => spacing -> Event Unit
 interval spacing = do
@@ -33,7 +39,7 @@ interval spacing = do
     fiber <-
       (Aff.launchAff <<< forever) do
         Aff.delay ms
-        emit unit
+        liftEffect do emit unit
     pure do
       Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling") fiber
 

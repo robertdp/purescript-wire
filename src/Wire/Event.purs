@@ -12,7 +12,6 @@ import Data.Foldable (class Foldable, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect (Effect)
 import Effect.AVar as AVar
-import Effect.Aff (Aff)
 import Effect.Aff as Aff
 import Effect.Aff.AVar as AffVar
 import Effect.Class (liftEffect)
@@ -24,7 +23,7 @@ newtype Event a
   = Event (Subscribe a)
 
 type Subscribe a
-  = (a -> Aff Unit) -> Effect (Effect Unit)
+  = (a -> Effect Unit) -> Effect (Effect Unit)
 
 create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit, cancel :: Effect Unit }
 create = do
@@ -39,7 +38,7 @@ create = do
       Event \emit -> do
         unsubscribing <- Ref.new false
         let
-          subscriber = \a -> unlessM (Ref.read unsubscribing) do Aff.launchAff_ (emit a)
+          subscriber = \a -> unlessM (Ref.read unsubscribing) do emit a
         Ref.modify_ (flip Array.snoc subscriber) subscribers
         pure do
           Ref.write true unsubscribing
@@ -82,7 +81,7 @@ share source = do
     decrementCount = do
       count <- liftEffect do Ref.modify (_ - 1) subscriberCount
       when (count == 0) do
-        liftEffect  (Ref.read cancelSource) >>= sequence_
+        liftEffect (Ref.read cancelSource) >>= sequence_
         liftEffect do Ref.write Nothing cancelSource
 
     event =
@@ -116,7 +115,7 @@ bufferUntil flush source =
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
   Event \emit -> do
-    fiber <- Aff.launchAff do traverse_ emit xs
+    fiber <- Aff.launchAff do traverse_ (liftEffect <<< emit) xs
     pure do
       Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 
@@ -135,10 +134,7 @@ instance applyEvent :: Apply Event where
       # filterMap (\{ left, right } -> apply left right)
 
 instance applicativeEvent :: Applicative Event where
-  pure a =
-    Event \emit -> do
-      Aff.launchAff_ do emit a
-      mempty
+  pure a = Event \emit -> emit a *> mempty
 
 instance bindEvent :: Bind Event where
   bind (Event outer) f =

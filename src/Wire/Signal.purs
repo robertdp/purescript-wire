@@ -2,7 +2,6 @@ module Wire.Signal where
 
 import Prelude
 import Effect (Effect)
-import Effect.Aff as Aff
 import Effect.Ref as Ref
 import Wire.Event (Event)
 import Wire.Event as Event
@@ -27,6 +26,6 @@ create init = do
 
     event =
       Event.makeEvent \emit -> do
-        Ref.read value >>= Aff.launchAff_ <<< emit
+        Ref.read value >>= emit
         Event.subscribe inner.event emit
   pure { event, read, write, modify }
