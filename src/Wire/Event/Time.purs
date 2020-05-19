@@ -28,8 +28,8 @@ delay offset event = do
           AffVar.put a queue
     pure do
       cancel
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling delay") consumer
-      AVar.kill (Aff.error "cancelling delay") queue
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") consumer
+      AVar.kill (Aff.error "cancelled") queue
 
 interval :: forall spacing. Duration spacing => spacing -> Event Unit
 interval spacing = do
@@ -41,7 +41,7 @@ interval spacing = do
         Aff.delay ms
         liftEffect do emit unit
     pure do
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling") fiber
+      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
 
 timer :: forall offset spacing. Duration offset => Duration spacing => offset -> spacing -> Event Unit
 timer offset spacing = delay offset do pure unit <|> interval spacing
