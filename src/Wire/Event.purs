@@ -1,24 +1,23 @@
 module Wire.Event where
 
 import Prelude
-import Control.Alt (class Alt, alt, (<|>))
+import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus, empty)
 import Control.Apply (lift2)
-import Control.Monad.Rec.Class (Step(..), forever, tailRecM)
+import Control.Monad.Rec.Class (Step(..), tailRecM)
 import Data.Array as Array
 import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
 import Data.Foldable (class Foldable, for_, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect (Effect)
-import Effect.AVar as AVar
 import Effect.Aff (Milliseconds(..))
 import Effect.Aff as Aff
-import Effect.Aff.AVar as AffVar
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Partial.Unsafe (unsafePartial)
 import Unsafe.Reference (unsafeRefEq)
+import Wire.Event.Queue as Queue
 
 newtype Event a
   = Event (Subscriber a -> Effect Canceller)
@@ -32,11 +31,7 @@ type Canceller
 create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit, cancel :: Effect Unit }
 create = do
   subscribers <- Ref.new []
-  queue <- AVar.empty
-  consumer <-
-    (Aff.launchAff <<< Aff.attempt <<< forever) do
-      a <- AffVar.take queue
-      liftEffect do Ref.read subscribers >>= traverse_ \k -> k a
+  queue <- Queue.create \a -> Ref.read subscribers >>= traverse_ \k -> k a
   let
     event =
       Event \emit -> do
@@ -47,13 +42,7 @@ create = do
         pure do
           Ref.write true unsubscribing
           Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
-
-    push a = Aff.launchAff_ do AffVar.put a queue
-
-    cancel = do
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") consumer
-      AVar.kill (Aff.error "cancelled") queue
-  pure { event, push, cancel }
+  pure { event, push: queue.push, cancel: queue.kill }
 
 makeEvent :: forall a. (Subscriber a -> Effect Canceller) -> Event a
 makeEvent = Event
@@ -134,6 +123,7 @@ range start end =
       go pos
         | pos /= end = do
           liftEffect do emit pos
+          Aff.delay (Milliseconds 0.0)
           pure (Loop (pos + step))
 
       go _ = do
@@ -152,7 +142,13 @@ times n
 times _ = empty
 
 instance functorEvent :: Functor Event where
-  map f (Event event) = Event \emit -> event \a -> emit (f a)
+  map f (Event event) =
+    Event \emit -> do
+      queue <- Queue.create (emit <<< f)
+      cancel <- event queue.push
+      pure do
+        cancel
+        queue.kill
 
 instance applyEvent :: Apply Event where
   apply eventF eventA =
