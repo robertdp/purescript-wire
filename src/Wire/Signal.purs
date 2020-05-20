@@ -25,16 +25,13 @@ create init = do
 
     modify' f = Ref.modify f value >>= inner.push
 
-    event' =
-      Event.makeEvent \emit -> do
-        Ref.read value >>= emit
-        Event.subscribe inner.event emit
-
-    signal = Signal { event: event', read: read', write: write', modify: modify' }
+    signal = Signal { event: inner.event, read: read', write: write', modify: modify' }
   pure { signal, cancel: inner.cancel }
 
 subscribe :: forall a. Signal a -> Subscriber a -> Effect Canceler
-subscribe (Signal s) = Event.subscribe s.event
+subscribe (Signal s) k = do
+  s.read >>= k
+  Event.subscribe s.event k
 
 event :: forall a. Signal a -> Event a
 event (Signal s) = s.event
