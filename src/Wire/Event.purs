@@ -20,12 +20,12 @@ import Unsafe.Reference (unsafeRefEq)
 import Wire.Event.Queue as Queue
 
 newtype Event a
-  = Event (Subscriber a -> Effect Canceller)
+  = Event (Subscriber a -> Effect Canceler)
 
 type Subscriber a
   = a -> Effect Unit
 
-type Canceller
+type Canceler
   = Effect Unit
 
 create :: forall a. Effect { event :: Event a, push :: a -> Effect Unit, cancel :: Effect Unit }
@@ -44,10 +44,10 @@ create = do
           Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
   pure { event, push: queue.push, cancel: queue.kill }
 
-makeEvent :: forall a. (Subscriber a -> Effect Canceller) -> Event a
+makeEvent :: forall a. (Subscriber a -> Effect Canceler) -> Event a
 makeEvent = Event
 
-subscribe :: forall a. Event a -> Subscriber a -> Effect Canceller
+subscribe :: forall a. Event a -> Subscriber a -> Effect Canceler
 subscribe (Event event) = event
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a
@@ -114,7 +114,7 @@ fromFoldable xs =
           liftEffect do emit x
           Aff.delay (Milliseconds 0.0)
     pure do
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
+      Aff.launchAff_ do Aff.killFiber (Aff.error "canceled") fiber
 
 range :: Int -> Int -> Event Int
 range start end =
@@ -131,7 +131,7 @@ range start end =
         pure (Done unit)
     fiber <- Aff.launchAff do tailRecM go start
     pure do
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelled") fiber
+      Aff.launchAff_ do Aff.killFiber (Aff.error "canceled") fiber
   where
   step = if start < end then 1 else -1
 
