@@ -35,7 +35,7 @@ interval spacing = do
         Aff.delay ms
         liftEffect do emit unit
     pure do
-      Aff.launchAff_ do Aff.killFiber (Aff.error "cancelling") fiber
+      Aff.launchAff_ do Aff.killFiber (Aff.error "canceling") fiber
 
 timer :: forall offset spacing. Duration offset => Duration spacing => offset -> spacing -> Event Unit
 timer offset spacing = delay offset do pure unit <|> interval spacing

@@ -3,7 +3,7 @@ module Wire.Signal where
 import Prelude
 import Effect (Effect)
 import Effect.Ref as Ref
-import Wire.Event (Event)
+import Wire.Event (Canceler, Event, Subscriber)
 import Wire.Event as Event
 
 newtype Signal a
@@ -32,6 +32,9 @@ create init = do
 
     signal = Signal { event: event', read: read', write: write', modify: modify' }
   pure { signal, cancel: inner.cancel }
+
+subscribe :: forall a. Signal a -> Subscriber a -> Effect Canceler
+subscribe (Signal s) = Event.subscribe s.event
 
 event :: forall a. Signal a -> Event a
 event (Signal s) = s.event
