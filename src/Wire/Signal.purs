@@ -14,7 +14,7 @@ newtype Signal a
   , write :: a -> Effect Unit
   }
 
-create :: forall a. a -> Effect { signal :: Signal a, cancel :: Effect Unit }
+create :: forall a. Eq a => a -> Effect { signal :: Signal a, cancel :: Effect Unit }
 create init = do
   value <- Ref.new init
   inner <- Event.create
@@ -25,7 +25,7 @@ create init = do
 
     modify' f = Ref.modify f value >>= inner.push
 
-    signal = Signal { event: inner.event, read: read', write: write', modify: modify' }
+    signal = Signal { event: Event.distinct inner.event, read: read', write: write', modify: modify' }
   pure { signal, cancel: inner.cancel }
 
 subscribe :: forall a. Signal a -> Subscriber a -> Effect Canceler
@@ -44,6 +44,3 @@ write a (Signal s) = s.write a
 
 modify :: forall a. (a -> a) -> Signal a -> Effect Unit
 modify f (Signal s) = s.modify f
-
-distinct :: forall a. Eq a => Signal a -> Signal a
-distinct (Signal s) = Signal s { event = Event.distinct s.event }
