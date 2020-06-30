@@ -77,3 +77,8 @@ instance applySignal :: Apply Signal where
 
 instance applicativeSignal :: Applicative Signal where
   pure a = Signal { event: empty, read: pure a }
+
+instance bindSignal :: Bind Signal where
+  bind (Signal s) f = Signal { event: s.event >>= f >>> event, read: s.read >>= f >>> read }
+
+instance monadSignal :: Monad Signal
