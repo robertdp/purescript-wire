@@ -10,8 +10,7 @@ import Wire.Signal (Signal)
 import Wire.Signal as Signal
 
 data AtomicF a next
-  = Read (a -> next)
-  | Write a next
+  = Modify (a -> a) (a -> next)
 
 derive instance functorAtomicF :: Functor (AtomicF a)
 
@@ -19,20 +18,24 @@ type Handler m a
   = FreeT (AtomicF a) m Unit
 
 read :: forall a m. Monad m => FreeT (AtomicF a) m a
-read = liftFreeT $ Read identity
+read = liftFreeT $ Modify identity identity
 
 write :: forall a m. Monad m => a -> FreeT (AtomicF a) m Unit
-write a = liftFreeT $ Write a unit
+write a = liftFreeT $ Modify (const a) (const unit)
+
+modify :: forall m a. Monad m => (a -> a) -> FreeT (AtomicF a) m a
+modify f = liftFreeT $ Modify f identity
+
+modify_ :: forall m a. Monad m => (a -> a) -> FreeT (AtomicF a) m Unit
+modify_ f = liftFreeT $ Modify f (const unit)
 
 interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomicF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
-    Read next -> do
+    Modify f next -> do
+      liftEffect (store.modify f)
       a <- liftEffect (Signal.read store.signal)
       pure (next a)
-    Write a next -> do
-      liftEffect (store.write a)
-      pure next
 
 type StoreSignal a
   = { signal :: Signal a
