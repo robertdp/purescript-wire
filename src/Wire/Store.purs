@@ -10,10 +10,8 @@ import Foreign.Object as Object
 import Partial.Unsafe (unsafePartial)
 import Prim.Row (class Cons, class Lacks)
 import Unsafe.Coerce (unsafeCoerce)
-import Wire.Store.Atom (Atom(..))
-import Wire.Store.Atom.Async as Async
-import Wire.Store.Atom.Pure as Pure
-import Wire.Store.Atom.Sync as Sync
+import Wire.Store.Atom.Class (class Atom)
+import Wire.Store.Atom.Class as Class
 import Wire.Store.Atom.Types (AtomSignal)
 
 newtype Store (atoms :: # Type)
@@ -22,19 +20,17 @@ newtype Store (atoms :: # Type)
 empty :: Store ()
 empty = Store { atoms: Object.empty }
 
-withAtom ::
-  forall key value before after.
+insertAtom ::
+  forall key value before after atom.
+  Atom atom key value =>
   IsSymbol key =>
   Lacks key before =>
   Cons key value before after =>
-  Atom key value ->
+  atom ->
   Store before ->
   Effect (Store after)
-withAtom atom (Store store) = do
-  signal <- case atom of
-    Async a -> Async.createSignal a
-    Sync a -> Sync.createSignal a
-    Pure a -> Pure.createSignal a
+insertAtom atom (Store store) = do
+  signal <- Class.create atom
   pure
     $ Store
         store
@@ -44,29 +40,36 @@ withAtom atom (Store store) = do
               store.atoms
           }
 
-getAtomSignal ::
-  forall key value atoms r.
+getAtom ::
+  forall key value atoms r atom.
+  Atom atom key value =>
   IsSymbol key =>
   Cons key value r atoms =>
-  Atom key value ->
-  Store atoms -> AtomSignal value
-getAtomSignal _ (Store { atoms }) =
+  atom ->
+  Store atoms ->
+  AtomSignal value
+getAtom _ (Store { atoms }) =
   (unsafeCoerce :: forall a. Foreign -> AtomSignal a)
     $ unsafePartial fromJust
     $ Object.lookup (reflectSymbol (SProxy :: _ key)) atoms
 
-resetAtom :: forall key value atoms r. IsSymbol key => Cons key value r atoms => Atom key value -> Store atoms -> Effect Unit
-resetAtom atom =
-  getAtomSignal atom
-    >>> case atom of
-        Async a -> Async.reset a
-        Sync a -> Sync.reset a
-        Pure a -> Pure.reset a
+resetAtom ::
+  forall key value atoms r atom.
+  Atom atom key value =>
+  IsSymbol key =>
+  Cons key value r atoms =>
+  atom ->
+  Store atoms ->
+  Effect Unit
+resetAtom atom = getAtom atom >>> Class.reset atom
 
-updateAtom :: forall key value atoms r. IsSymbol key => Cons key value r atoms => value -> Atom key value -> Store atoms -> Effect Unit
-updateAtom value atom =
-  getAtomSignal atom
-    >>> case atom of
-        Async a -> Async.update value a
-        Sync a -> Sync.update value a
-        Pure a -> Pure.update value a
+updateAtom ::
+  forall key value atoms r atom.
+  Atom atom key value =>
+  IsSymbol key =>
+  Cons key value r atoms =>
+  atom ->
+  value ->
+  Store atoms ->
+  Effect Unit
+updateAtom atom value = getAtom atom >>> Class.update atom value
