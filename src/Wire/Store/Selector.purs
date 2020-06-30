@@ -39,4 +39,4 @@ read :: forall value r atoms key. IsSymbol key => Cons key value r atoms => Atom
 read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Signal.read (Store.lookup atom store).signal
 
 write :: forall r atoms value key. IsSymbol key => Cons key value r atoms => value -> Atom key value -> FreeT (SelectF atoms) Effect Unit
-write value atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ (Store.lookup atom store).write value
+write value atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.update value atom store
