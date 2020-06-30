@@ -3,7 +3,7 @@ module Wire.Store.Atom.Sync where
 import Prelude
 import Control.Monad.Free.Trans (FreeT)
 import Effect (Effect)
-import Wire.Store.Atom.Types (AtomF, AtomStore, Lifecycle(..), createEmptyStore, interpret)
+import Wire.Store.Atom.Types (AtomF, AtomSignal, Lifecycle(..), createEmptySignal, interpret)
 
 newtype Sync a
   = Sync' (Lifecycle a -> Handler a)
@@ -11,18 +11,17 @@ newtype Sync a
 type Handler a
   = FreeT (AtomF a) Effect Unit
 
-createStore :: forall a. Sync a -> Effect (AtomStore a)
-createStore (Sync' handler) = do
-  store <- createEmptyStore
-  run (handler Init) store
-  pure store
+createSignal :: forall a. Sync a -> Effect (AtomSignal a)
+createSignal (Sync' handler) = do
+  signal <- createEmptySignal
+  run (handler Init) signal
+  pure signal
 
-run :: forall a. Handler a -> AtomStore a -> Effect Unit
+run :: forall a. Handler a -> AtomSignal a -> Effect Unit
 run = flip interpret
 
-reset :: forall a. Sync a -> AtomStore a -> Effect Unit
-reset (Sync' handler) store@{ write } = do
-  run (handler Init) store
+reset :: forall a. Sync a -> AtomSignal a -> Effect Unit
+reset (Sync' handler) signal = run (handler Init) signal
 
-update :: forall a. a -> Sync a -> AtomStore a -> Effect Unit
+update :: forall a. a -> Sync a -> AtomSignal a -> Effect Unit
 update value (Sync' handler) = run (handler (Update value))

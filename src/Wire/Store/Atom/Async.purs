@@ -5,7 +5,7 @@ import Control.Monad.Free.Trans (FreeT)
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
-import Wire.Store.Atom.Types (AtomF, AtomStore, Lifecycle(..), createEmptyStore, interpret)
+import Wire.Store.Atom.Types (AtomF, AtomSignal, Lifecycle(..), createEmptySignal, interpret)
 
 newtype Async a
   = Async' (Lifecycle a -> Handler a)
@@ -13,19 +13,19 @@ newtype Async a
 type Handler a
   = FreeT (AtomF a) Aff Unit
 
-createStore :: forall a. Async a -> Effect (AtomStore a)
-createStore (Async' handler) = do
-  store <- createEmptyStore
-  run (handler Init) store
-  pure store
+createSignal :: forall a. Async a -> Effect (AtomSignal a)
+createSignal (Async' handler) = do
+  signal <- createEmptySignal
+  run (handler Init) signal
+  pure signal
 
-run :: forall a. Handler a -> AtomStore a -> Effect Unit
-run handler store = launchAff_ $ interpret store handler
+run :: forall a. Handler a -> AtomSignal a -> Effect Unit
+run handler signal = launchAff_ $ interpret signal handler
 
-reset :: forall a. Async a -> AtomStore a -> Effect Unit
-reset (Async' handler) store@{ write } = do
-  write Nothing
-  run (handler Init) store
+reset :: forall a. Async a -> AtomSignal a -> Effect Unit
+reset (Async' handler) signal = do
+  signal.write Nothing
+  run (handler Init) signal
 
-update :: forall a. a -> Async a -> AtomStore a -> Effect Unit
+update :: forall a. a -> Async a -> AtomSignal a -> Effect Unit
 update value (Async' handler) = run (handler (Update value))

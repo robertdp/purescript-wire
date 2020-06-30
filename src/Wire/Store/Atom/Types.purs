@@ -25,7 +25,7 @@ peek = liftFreeT $ Peek identity
 poke :: forall a m. Monad m => a -> FreeT (AtomF a) m Unit
 poke a = liftFreeT $ Poke a unit
 
-interpret :: forall a m. MonadEffect m => MonadRec m => AtomStore a -> FreeT (AtomF a) m Unit -> m Unit
+interpret :: forall a m. MonadEffect m => MonadRec m => AtomSignal a -> FreeT (AtomF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
     Peek next -> do
@@ -35,13 +35,13 @@ interpret store =
       liftEffect (store.write (pure a))
       pure next
 
-type AtomStore a
+type AtomSignal a
   = { signal :: Signal (Maybe a)
     , write :: Maybe a -> Effect Unit
     }
 
-createEmptyStore :: forall a. Effect (AtomStore a)
-createEmptyStore = do
+createEmptySignal :: forall a. Effect (AtomSignal a)
+createEmptySignal = do
   { signal, write } <- Signal.create Nothing
   pure { signal, write }
 
