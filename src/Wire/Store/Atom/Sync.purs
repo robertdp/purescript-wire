@@ -4,7 +4,7 @@ import Prelude
 import Control.Monad.Free.Trans (FreeT)
 import Effect (Effect)
 import Wire.Signal as Signal
-import Wire.Store.Atom.Types (StateF, StoreSignal, Action(..), interpret)
+import Wire.Store.Atom.Types (AtomicF, StoreSignal, Action(..), interpret)
 
 newtype Sync a
   = Sync'
@@ -13,7 +13,7 @@ newtype Sync a
   }
 
 type Handler a
-  = FreeT (StateF a) Effect Unit
+  = FreeT (AtomicF a) Effect Unit
 
 createSignal :: forall a. Sync a -> Effect (StoreSignal a)
 createSignal (Sync' { default, handler }) = do

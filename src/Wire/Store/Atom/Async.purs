@@ -5,7 +5,7 @@ import Control.Monad.Free.Trans (FreeT)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
 import Wire.Signal as Signal
-import Wire.Store.Atom.Types (StateF, StoreSignal, Action(..), interpret)
+import Wire.Store.Atom.Types (AtomicF, StoreSignal, Action(..), interpret)
 
 newtype Async a
   = Async'
@@ -14,7 +14,7 @@ newtype Async a
   }
 
 type Handler a
-  = FreeT (StateF a) Aff Unit
+  = FreeT (AtomicF a) Aff Unit
 
 createSignal :: forall a. Async a -> Effect (StoreSignal a)
 createSignal (Async' { default, handler }) = do

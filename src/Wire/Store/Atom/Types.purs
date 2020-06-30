@@ -9,33 +9,30 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
 
-data StateF a next
-  = State (a -> a) (a -> next)
+data AtomicF a next
+  = Read (a -> next)
+  | Write a next
 
-derive instance functorStateF :: Functor (StateF a)
+derive instance functorAtomicF :: Functor (AtomicF a)
 
 type Handler m a
-  = FreeT (StateF a) m Unit
+  = FreeT (AtomicF a) m Unit
 
-read :: forall a m. Monad m => FreeT (StateF a) m a
-read = liftFreeT $ State identity identity
+read :: forall a m. Monad m => FreeT (AtomicF a) m a
+read = liftFreeT $ Read identity
 
-write :: forall a m. Monad m => a -> FreeT (StateF a) m Unit
-write a = liftFreeT $ State (const a) (const unit)
+write :: forall a m. Monad m => a -> FreeT (AtomicF a) m Unit
+write a = liftFreeT $ Write a unit
 
-modify :: forall m a. Monad m => (a -> a) -> FreeT (StateF a) m a
-modify f = liftFreeT $ State f identity
-
-modify_ :: forall m a. Monad m => (a -> a) -> FreeT (StateF a) m Unit
-modify_ f = liftFreeT $ State f (const unit)
-
-interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (StateF a) m Unit -> m Unit
+interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomicF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
-    State f next -> do
-      liftEffect (store.modify f)
+    Read next -> do
       a <- liftEffect (Signal.read store.signal)
       pure (next a)
+    Write a next -> do
+      liftEffect (store.write a)
+      pure next
 
 type StoreSignal a
   = { signal :: Signal a
