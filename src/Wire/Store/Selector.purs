@@ -35,31 +35,31 @@ derive instance functorSelectF :: Functor (SelectF atoms)
 
 select ::
   forall atom key r atoms value.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Cons key value r atoms =>
-  atom ->
+  atom key value ->
   FreeT (SelectF atoms) Signal value
 select atom = freeT \_ -> pure $ Right $ Apply \store -> lift (Store.getAtom atom store).signal
 
 read ::
   forall atom value r atoms key.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Cons key value r atoms =>
-  atom ->
+  atom key value ->
   FreeT (SelectF atoms) Effect value
 read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Signal.read (Store.getAtom atom store).signal
 
 write ::
   forall atom r atoms value key.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Cons key value r atoms =>
+  atom key value ->
   value ->
-  atom ->
   FreeT (SelectF atoms) Effect Unit
-write value atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.updateAtom atom value store
+write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.updateAtom atom value store
 
 interpret :: forall a m atoms. MonadRec m => Store atoms -> FreeT (SelectF atoms) m a -> m a
 interpret store = runFreeT \(Apply run) -> pure (run store)

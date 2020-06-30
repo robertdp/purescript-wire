@@ -10,7 +10,7 @@ newtype Pure (key :: Symbol) value
 new :: forall value key. value -> Pure key value
 new = Pure
 
-instance atomPure :: Atom (Pure key value) key value where
+instance atomPure :: Atom Pure where
   create (Pure value) = do
     signal <- Signal.create value
     pure signal

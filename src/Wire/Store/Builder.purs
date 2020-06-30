@@ -1,7 +1,6 @@
 module Wire.Store.Builder where
 
 import Prelude
-
 import Data.Profunctor.Star (Star(..))
 import Data.Symbol (class IsSymbol)
 import Effect (Effect)
@@ -15,11 +14,11 @@ newtype Builder i o
 
 insert ::
   forall atom value key o i.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Lacks key i =>
   Cons key value i o =>
-  atom ->
+  atom key value ->
   Builder i o
 insert atom = Builder $ Star $ Store.insertAtom atom
 

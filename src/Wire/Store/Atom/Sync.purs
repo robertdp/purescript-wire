@@ -24,7 +24,7 @@ new ::
   Sync key value
 new = Sync
 
-instance atomSync :: Atom (Sync key value) key value where
+instance atomSync :: Atom Sync where
   create (Sync { default, handler }) = do
     signal <- Signal.create default
     run (handler Initialize) signal

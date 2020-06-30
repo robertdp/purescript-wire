@@ -25,7 +25,7 @@ new = Async
 type Handler a
   = FreeT (AtomicF a) Aff Unit
 
-instance atomAsync :: Atom (Async key value) key value where
+instance atomAsync :: Atom Async where
   create (Async { default, handler }) = do
     signal <- Signal.create default
     run (handler Initialize) signal

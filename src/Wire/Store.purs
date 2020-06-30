@@ -22,11 +22,11 @@ empty = Store { atoms: Object.empty }
 
 insertAtom ::
   forall key value before after atom.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Lacks key before =>
   Cons key value before after =>
-  atom ->
+  atom key value ->
   Store before ->
   Effect (Store after)
 insertAtom atom (Store store) = do
@@ -42,10 +42,10 @@ insertAtom atom (Store store) = do
 
 getAtom ::
   forall key value atoms r atom.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Cons key value r atoms =>
-  atom ->
+  atom key value ->
   Store atoms ->
   AtomSignal value
 getAtom _ (Store { atoms }) =
@@ -55,20 +55,20 @@ getAtom _ (Store { atoms }) =
 
 resetAtom ::
   forall key value atoms r atom.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Cons key value r atoms =>
-  atom ->
+  atom key value ->
   Store atoms ->
   Effect Unit
 resetAtom atom = getAtom atom >>> Class.reset atom
 
 updateAtom ::
   forall key value atoms r atom.
-  Atom atom key value =>
+  Atom atom =>
   IsSymbol key =>
   Cons key value r atoms =>
-  atom ->
+  atom key value ->
   value ->
   Store atoms ->
   Effect Unit
