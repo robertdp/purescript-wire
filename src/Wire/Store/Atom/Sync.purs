@@ -2,20 +2,22 @@ module Wire.Store.Atom.Sync where
 
 import Prelude
 import Control.Monad.Free.Trans (FreeT)
-import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Wire.Signal as Signal
 import Wire.Store.Atom.Types (AtomicF, StoreSignal, Action(..), interpret)
 
 newtype Sync a
-  = Sync' (Action a -> Handler a)
+  = Sync'
+  { default :: a
+  , handler :: Action a -> Handler a
+  }
 
 type Handler a
   = FreeT (AtomicF a) Effect Unit
 
 createSignal :: forall a. Sync a -> Effect (StoreSignal a)
-createSignal (Sync' handler) = do
-  signal <- Signal.create Nothing
+createSignal (Sync' { default, handler }) = do
+  signal <- Signal.create default
   run (handler Initialize) signal
   pure signal
 
@@ -23,7 +25,9 @@ run :: forall a. Handler a -> StoreSignal a -> Effect Unit
 run = flip interpret
 
 reset :: forall a. Sync a -> StoreSignal a -> Effect Unit
-reset (Sync' handler) signal = run (handler Initialize) signal
+reset (Sync' { default, handler }) signal = do
+  signal.write default
+  run (handler Initialize) signal
 
 update :: forall a. a -> Sync a -> StoreSignal a -> Effect Unit
-update value (Sync' handler) = run (handler (Update value))
+update value (Sync' { handler }) = run (handler (Update value))

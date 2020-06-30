@@ -13,11 +13,11 @@ data Atom (key :: Symbol) a
   | Sync (Sync a)
   | Pure (Pure a)
 
-makeAsync :: forall a key. (Action a -> Handler Aff a) -> Atom key a
-makeAsync = Async <<< Async'
+makeAsync :: forall a key. a -> (Action a -> Handler Aff a) -> Atom key a
+makeAsync default handler = Async (Async' { default, handler })
 
-makeSync :: forall a key. (Action a -> Handler Effect a) -> Atom key a
-makeSync = Sync <<< Sync'
+makeSync :: forall a key. a -> (Action a -> Handler Effect a) -> Atom key a
+makeSync default handler = Sync (Sync' { default, handler })
 
 makePure :: forall a key. a -> Atom key a
 makePure = Pure <<< Pure'
