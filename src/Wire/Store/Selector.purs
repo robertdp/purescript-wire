@@ -14,7 +14,7 @@ import Wire.Store (Store)
 import Wire.Store as Store
 import Wire.Store.Atom.Class (class Atom)
 
-newtype Selector (atoms :: # Type) a
+newtype Selector atoms a
   = Selector
   { select :: FreeT (SelectF atoms) Signal a
   , update :: a -> FreeT (SelectF atoms) Effect Unit
@@ -28,7 +28,7 @@ makeSelector ::
   Selector atoms a
 makeSelector = Selector
 
-data SelectF (atoms :: # Type) next
+data SelectF atoms next
   = Apply (Store atoms -> next)
 
 derive instance functorSelectF :: Functor (SelectF atoms)
@@ -39,7 +39,7 @@ select ::
   IsSymbol key =>
   Cons key value r atoms =>
   atom key value ->
-  FreeT (SelectF atoms) Signal value
+  FreeT (SelectF { | atoms }) Signal value
 select atom = freeT \_ -> pure $ Right $ Apply \store -> lift (Store.getAtom atom store).signal
 
 read ::
@@ -48,7 +48,7 @@ read ::
   IsSymbol key =>
   Cons key value r atoms =>
   atom key value ->
-  FreeT (SelectF atoms) Effect value
+  FreeT (SelectF { | atoms }) Effect value
 read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Signal.read (Store.getAtom atom store).signal
 
 write ::
@@ -58,16 +58,16 @@ write ::
   Cons key value r atoms =>
   atom key value ->
   value ->
-  FreeT (SelectF atoms) Effect Unit
+  FreeT (SelectF { | atoms }) Effect Unit
 write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.updateAtom atom value store
 
-interpret :: forall a m atoms. MonadRec m => Store atoms -> FreeT (SelectF atoms) m a -> m a
+interpret :: forall a m atoms. MonadRec m => Store { | atoms } -> FreeT (SelectF { | atoms }) m a -> m a
 interpret store = runFreeT \(Apply run) -> pure (run store)
 
 build ::
   forall a atoms.
-  Selector atoms a ->
-  Store atoms ->
+  Selector { | atoms } a ->
+  Store { | atoms } ->
   { signal :: Signal a
   , write :: a -> Effect Unit
   }

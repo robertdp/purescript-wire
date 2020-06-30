@@ -8,27 +8,26 @@ import Foreign (Foreign)
 import Foreign.Object (Object)
 import Foreign.Object as Object
 import Partial.Unsafe (unsafePartial)
-import Prim.Row (class Cons, class Lacks)
+import Prim.Row (class Cons)
 import Unsafe.Coerce (unsafeCoerce)
 import Wire.Store.Atom.Class (class Atom)
 import Wire.Store.Atom.Class as Class
 import Wire.Store.Atom.Types (AtomSignal)
 
-newtype Store (atoms :: # Type)
+newtype Store atoms
   = Store { atoms :: Object Foreign }
 
-empty :: Store ()
+empty :: Store {}
 empty = Store { atoms: Object.empty }
 
 insertAtom ::
   forall key value before after atom.
   Atom atom =>
   IsSymbol key =>
-  Lacks key before =>
   Cons key value before after =>
   atom key value ->
-  Store before ->
-  Effect (Store after)
+  Store { | before } ->
+  Effect (Store { | after })
 insertAtom atom (Store store) = do
   signal <- Class.create atom
   pure
@@ -46,7 +45,7 @@ getAtom ::
   IsSymbol key =>
   Cons key value r atoms =>
   atom key value ->
-  Store atoms ->
+  Store { | atoms } ->
   AtomSignal value
 getAtom _ (Store { atoms }) =
   (unsafeCoerce :: forall a. Foreign -> AtomSignal a)
@@ -59,7 +58,7 @@ resetAtom ::
   IsSymbol key =>
   Cons key value r atoms =>
   atom key value ->
-  Store atoms ->
+  Store { | atoms } ->
   Effect Unit
 resetAtom atom = getAtom atom >>> Class.reset atom
 
@@ -70,6 +69,6 @@ updateAtom ::
   Cons key value r atoms =>
   atom key value ->
   value ->
-  Store atoms ->
+  Store { | atoms } ->
   Effect Unit
 updateAtom atom value = getAtom atom >>> Class.update atom value
