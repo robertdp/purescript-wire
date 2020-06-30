@@ -4,46 +4,43 @@ import Prelude
 import Control.Monad.Free.Trans (FreeT, liftFreeT, runFreeT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Data.Foldable (class Foldable)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe)
 import Effect (Effect)
 import Effect.Class (class MonadEffect, liftEffect)
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
 
-data AtomF a next
-  = Peek (Maybe a -> next)
-  | Poke a next
+data AtomicF a next
+  = Read (Maybe a -> next)
+  | Write a next
 
-derive instance functorAtomF :: Functor (AtomF a)
+derive instance functorAtomicF :: Functor (AtomicF a)
 
 type Handler m a
-  = FreeT (AtomF a) m Unit
+  = FreeT (AtomicF a) m Unit
 
-peek :: forall a m. Monad m => FreeT (AtomF a) m (Maybe a)
-peek = liftFreeT $ Peek identity
+read :: forall a m. Monad m => FreeT (AtomicF a) m (Maybe a)
+read = liftFreeT $ Read identity
 
-poke :: forall a m. Monad m => a -> FreeT (AtomF a) m Unit
-poke a = liftFreeT $ Poke a unit
+write :: forall a m. Monad m => a -> FreeT (AtomicF a) m Unit
+write a = liftFreeT $ Write a unit
 
-interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomF a) m Unit -> m Unit
+interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomicF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
-    Peek next -> do
+    Read next -> do
       a <- liftEffect (Signal.read store.signal)
       pure (next a)
-    Poke a next -> do
+    Write a next -> do
       liftEffect (store.write (pure a))
       pure next
 
 type StoreSignal a
   = { signal :: Signal (Maybe a)
     , write :: Maybe a -> Effect Unit
+    , modify :: (Maybe a -> Maybe a) -> Effect Unit
+    , cancel :: Effect Unit
     }
-
-createEmptySignal :: forall a. Effect (StoreSignal a)
-createEmptySignal = do
-  { signal, write } <- Signal.create Nothing
-  pure { signal, write }
 
 data Action a
   = Initialize

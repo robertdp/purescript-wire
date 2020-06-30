@@ -4,23 +4,40 @@ import Prelude
 import Control.Monad.Free.Trans (FreeT, freeT)
 import Control.Monad.Maybe.Trans (MaybeT(..), lift)
 import Data.Either (Either(..))
+import Data.Maybe (Maybe)
 import Data.Symbol (class IsSymbol)
 import Effect (Effect)
 import Prim.Row (class Cons)
 import Wire.Signal (Signal)
+import Wire.Signal as Signal
 import Wire.Store (Store)
 import Wire.Store as Store
 import Wire.Store.Atom (Atom)
 
-data Selector key (atoms :: # Type) a
-  = Selector' (FreeT (SelectorF atoms) (MaybeT Signal) a) (a -> Effect Unit)
+newtype Selector key (atoms :: # Type) a
+  = Selector'
+  { select :: FreeT (SelectF atoms) (MaybeT Signal) a
+  , update :: a -> FreeT (SelectF atoms) Effect Unit
+  }
 
-data SelectorF (atoms :: # Type) next
-  = Select (Store atoms -> next)
+makeSelector ::
+  forall a atoms key.
+  { select :: FreeT (SelectF atoms) (MaybeT Signal) a
+  , update :: a -> FreeT (SelectF atoms) Effect Unit
+  } ->
+  Selector key atoms a
+makeSelector = Selector'
 
-derive instance functorSelectorF :: Functor (SelectorF atoms)
+data SelectF (atoms :: # Type) next
+  = Apply (Store atoms -> next)
 
-select :: forall key r atoms value. IsSymbol key => Cons key value r atoms => Atom key value -> FreeT (SelectorF atoms) (MaybeT Signal) value
-select atom =
-  freeT \_ ->
-    pure $ Right $ Select \store -> lift $ MaybeT (Store.lookup atom store).signal
+derive instance functorSelectF :: Functor (SelectF atoms)
+
+select :: forall key r atoms value. IsSymbol key => Cons key value r atoms => Atom key value -> FreeT (SelectF atoms) (MaybeT Signal) value
+select atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ MaybeT (Store.lookup atom store).signal
+
+read :: forall value r atoms key. IsSymbol key => Cons key value r atoms => Atom key value -> FreeT (SelectF atoms) Effect (Maybe value)
+read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Signal.read (Store.lookup atom store).signal
+
+write :: forall r atoms value key. IsSymbol key => Cons key value r atoms => value -> Atom key value -> FreeT (SelectF atoms) Effect Unit
+write value atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ (Store.lookup atom store).write $ pure value
