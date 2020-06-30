@@ -9,30 +9,30 @@ import Effect.Class (class MonadEffect, liftEffect)
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
 
-data AtomicF a next
-  = Modify (a -> a) (a -> next)
+data StateF a next
+  = State (a -> a) (a -> next)
 
-derive instance functorAtomicF :: Functor (AtomicF a)
+derive instance functorStateF :: Functor (StateF a)
 
 type Handler m a
-  = FreeT (AtomicF a) m Unit
+  = FreeT (StateF a) m Unit
 
-read :: forall a m. Monad m => FreeT (AtomicF a) m a
-read = liftFreeT $ Modify identity identity
+read :: forall a m. Monad m => FreeT (StateF a) m a
+read = liftFreeT $ State identity identity
 
-write :: forall a m. Monad m => a -> FreeT (AtomicF a) m Unit
-write a = liftFreeT $ Modify (const a) (const unit)
+write :: forall a m. Monad m => a -> FreeT (StateF a) m Unit
+write a = liftFreeT $ State (const a) (const unit)
 
-modify :: forall m a. Monad m => (a -> a) -> FreeT (AtomicF a) m a
-modify f = liftFreeT $ Modify f identity
+modify :: forall m a. Monad m => (a -> a) -> FreeT (StateF a) m a
+modify f = liftFreeT $ State f identity
 
-modify_ :: forall m a. Monad m => (a -> a) -> FreeT (AtomicF a) m Unit
-modify_ f = liftFreeT $ Modify f (const unit)
+modify_ :: forall m a. Monad m => (a -> a) -> FreeT (StateF a) m Unit
+modify_ f = liftFreeT $ State f (const unit)
 
-interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomicF a) m Unit -> m Unit
+interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (StateF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
-    Modify f next -> do
+    State f next -> do
       liftEffect (store.modify f)
       a <- liftEffect (Signal.read store.signal)
       pure (next a)
