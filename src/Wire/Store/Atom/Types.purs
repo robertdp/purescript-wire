@@ -24,7 +24,7 @@ read = liftFreeT $ Read identity
 write :: forall a m. Monad m => a -> FreeT (AtomicF a) m Unit
 write a = liftFreeT $ Write a unit
 
-interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomicF a) m Unit -> m Unit
+interpret :: forall a m. MonadEffect m => MonadRec m => AtomSignal a -> FreeT (AtomicF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
     Read next -> do
@@ -34,11 +34,10 @@ interpret store =
       liftEffect (store.write a)
       pure next
 
-type StoreSignal a
+type AtomSignal a
   = { signal :: Signal a
     , write :: a -> Effect Unit
     , modify :: (a -> a) -> Effect Unit
-    , cancel :: Effect Unit
     }
 
 data Action a

@@ -11,6 +11,7 @@ You can edit this file as you like.
   , "freet"
   , "leibniz"
   , "profunctor"
+  , "react-basic-hooks"
   , "refs"
   , "unsafe-reference"
   ]
