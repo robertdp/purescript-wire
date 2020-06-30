@@ -12,6 +12,12 @@ import Wire.Store.Atom.Class (class Atom)
 newtype Builder i o
   = Builder (Star Effect (Store i) (Store o))
 
+instance semigroupoidBuilder :: Semigroupoid Builder where
+  compose (Builder f) (Builder g) = Builder (compose f g)
+
+instance categoryBuilder :: Category Builder where
+  identity = Builder identity
+
 insert ::
   forall atom value key o i.
   Atom atom =>
