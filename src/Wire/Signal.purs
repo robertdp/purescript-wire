@@ -1,7 +1,9 @@
 module Wire.Signal where
 
 import Prelude
+import Control.Plus (empty)
 import Effect (Effect)
+import Effect.Aff as Aff
 import Effect.Ref as Ref
 import Wire.Event (Canceler, Event, Subscriber)
 import Wire.Event as Event
@@ -10,48 +12,68 @@ newtype Signal a
   = Signal
   { event :: Event a
   , read :: Effect a
-  , write :: a -> Effect Unit
-  , modify :: (a -> a) -> Effect Unit
   }
 
-create :: forall a. Eq a => a -> Effect { signal :: Signal a, cancel :: Effect Unit }
+create ::
+  forall a.
+  a ->
+  Effect
+    { signal :: Signal a
+    , write :: a -> Effect Unit
+    , modify :: (a -> a) -> Effect Unit
+    , cancel :: Effect Unit
+    }
 create init = do
   value <- Ref.new init
   inner <- Event.create
   let
-    modify' f = Ref.modify f value >>= inner.push
+    modify' f = Ref.modify f value >>= Aff.launchAff_ <<< inner.push
 
     signal =
       Signal
-        { event: Event.distinct inner.event
+        { event: inner.event
         , read: Ref.read value
-        , write: modify' <<< const
-        , modify: modify'
         }
-  pure { signal, cancel: inner.cancel }
+  pure
+    { signal
+    , write: modify' <<< const
+    , modify: modify'
+    , cancel: inner.cancel
+    }
+
+distinct :: forall a. Eq a => Signal a -> Signal a
+distinct (Signal s) = Signal s { event = Event.distinct s.event }
+
+createDistinct ::
+  forall a.
+  Eq a =>
+  a ->
+  Effect
+    { cancel :: Effect Unit
+    , modify :: (a -> a) -> Effect Unit
+    , signal :: Signal a
+    , write :: a -> Effect Unit
+    }
+createDistinct init = do
+  signal <- create init
+  pure $ signal { signal = distinct signal.signal }
 
 subscribe :: forall a. Signal a -> Subscriber a -> Effect Canceler
 subscribe (Signal s) k = do
-  s.read >>= k
+  s.read >>= Aff.launchAff_ <<< k
   Event.subscribe s.event k
 
-event :: forall a. Signal a -> Event a
+event :: Signal ~> Event
 event (Signal s) = s.event
 
-read :: forall a. Signal a -> Effect a
+read :: Signal ~> Effect
 read (Signal s) = s.read
 
-write :: forall a. a -> Signal a -> Effect Unit
-write a (Signal s) = s.write a
+instance functorSignal :: Functor Signal where
+  map f (Signal s) = Signal { event: map f s.event, read: map f s.read }
 
-modify :: forall a. (a -> a) -> Signal a -> Effect Unit
-modify f (Signal s) = s.modify f
+instance applySignal :: Apply Signal where
+  apply (Signal f) (Signal a) = Signal { event: apply f.event a.event, read: apply f.read a.read }
 
-static :: forall a. a -> Signal a
-static a =
-  Signal
-    { event: pure a
-    , read: pure a
-    , modify: const mempty
-    , write: const mempty
-    }
+instance applicativeSignal :: Applicative Signal where
+  pure a = Signal { event: empty, read: pure a }
