@@ -13,7 +13,7 @@ import Wire.Store.Atom (Atom(..))
 import Wire.Store.Atom.Async as Async
 import Wire.Store.Atom.Pure as Pure
 import Wire.Store.Atom.Sync as Sync
-import Wire.Store.Atom.Types (AtomSignal)
+import Wire.Store.Atom.Types (StoreSignal)
 
 newtype Store (atoms :: # Type)
   = Store { atoms :: Object Compressed }
@@ -29,7 +29,7 @@ insert atom (Store store) = do
     Pure a -> Pure.createSignal a
   pure $ Store store { atoms = Object.insert (reflectSymbol (SProxy :: _ key)) (compress signal) store.atoms }
 
-lookup :: forall key value atoms r. IsSymbol key => Cons key value r atoms => Atom key value -> Store atoms -> AtomSignal value
+lookup :: forall key value atoms r. IsSymbol key => Cons key value r atoms => Atom key value -> Store atoms -> StoreSignal value
 lookup _ (Store { atoms }) = inflate $ unsafePartial fromJust $ Object.lookup (reflectSymbol (SProxy :: _ key)) atoms
 
 reset :: forall key value atoms r. IsSymbol key => Cons key value r atoms => Atom key value -> Store atoms -> Effect Unit
@@ -50,8 +50,8 @@ update value atom =
 
 data Compressed
 
-compress :: forall a. AtomSignal a -> Compressed
+compress :: forall a. StoreSignal a -> Compressed
 compress = unsafeCoerce
 
-inflate :: forall a. Compressed -> AtomSignal a
+inflate :: forall a. Compressed -> StoreSignal a
 inflate = unsafeCoerce

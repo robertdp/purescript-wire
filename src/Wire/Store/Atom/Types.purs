@@ -25,7 +25,7 @@ peek = liftFreeT $ Peek identity
 poke :: forall a m. Monad m => a -> FreeT (AtomF a) m Unit
 poke a = liftFreeT $ Poke a unit
 
-interpret :: forall a m. MonadEffect m => MonadRec m => AtomSignal a -> FreeT (AtomF a) m Unit -> m Unit
+interpret :: forall a m. MonadEffect m => MonadRec m => StoreSignal a -> FreeT (AtomF a) m Unit -> m Unit
 interpret store =
   runFreeT case _ of
     Peek next -> do
@@ -35,26 +35,26 @@ interpret store =
       liftEffect (store.write (pure a))
       pure next
 
-type AtomSignal a
+type StoreSignal a
   = { signal :: Signal (Maybe a)
     , write :: Maybe a -> Effect Unit
     }
 
-createEmptySignal :: forall a. Effect (AtomSignal a)
+createEmptySignal :: forall a. Effect (StoreSignal a)
 createEmptySignal = do
   { signal, write } <- Signal.create Nothing
   pure { signal, write }
 
-data Lifecycle a
-  = Init
+data Action a
+  = Initialize
   | Update a
 
-derive instance functorLifecycle :: Functor Lifecycle
+derive instance functorAction :: Functor Action
 
-instance foldableMaybe :: Foldable Lifecycle where
-  foldr _ z Init = z
+instance foldableAction :: Foldable Action where
+  foldr _ z Initialize = z
   foldr f z (Update x) = x `f` z
-  foldl _ z Init = z
+  foldl _ z Initialize = z
   foldl f z (Update x) = z `f` x
-  foldMap f Init = mempty
+  foldMap f Initialize = mempty
   foldMap f (Update x) = f x
