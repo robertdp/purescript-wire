@@ -35,8 +35,7 @@ newtype UseAtom a hooks
   ( UseEffect Unit
       ( UseState a
           ( UseLazy Unit
-              { modify :: (a -> a) -> Effect Unit
-              , signal :: Signal a
+              { signal :: Signal a
               , write :: a -> Effect Unit
               }
               (UseContext Store hooks)
@@ -55,7 +54,6 @@ useAtom atom =
         Nothing ->
           { signal: pure $ Atom.initialValue atom
           , write: mempty
-          , modify: mempty
           }
         Just storedSignal -> storedSignal
     value /\ setValue <- React.useState' $ unsafePerformEffect $ Signal.read signal

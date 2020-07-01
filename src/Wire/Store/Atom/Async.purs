@@ -7,7 +7,6 @@ import Effect.Aff (Aff, launchAff_)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
-import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
 import Wire.Store.Atom.Types (AtomicF, AtomSignal, Action(..), interpret)
 

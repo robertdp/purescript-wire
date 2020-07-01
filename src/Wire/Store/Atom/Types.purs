@@ -37,7 +37,6 @@ interpret store =
 type AtomSignal a
   = { signal :: Signal a
     , write :: a -> Effect Unit
-    , modify :: (a -> a) -> Effect Unit
     }
 
 data Action a

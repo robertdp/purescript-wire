@@ -19,7 +19,6 @@ create ::
   Effect
     { signal :: Signal a
     , write :: a -> Effect Unit
-    , modify :: (a -> a) -> Effect Unit
     }
 create init = do
   value <- Ref.new init
@@ -32,7 +31,7 @@ create init = do
         read' >>= notify
         Event.subscribe inner.event notify
 
-    modify' f = Ref.modify f value >>= inner.push
+    write a = Ref.write a value *> inner.push a
 
     signal =
       Signal
@@ -41,8 +40,7 @@ create init = do
         }
   pure
     { signal
-    , write: modify' <<< const
-    , modify: modify'
+    , write
     }
 
 distinct :: forall a. Eq a => Signal a -> Signal a
@@ -55,7 +53,6 @@ createDistinct ::
   Effect
     { signal :: Signal a
     , write :: a -> Effect Unit
-    , modify :: (a -> a) -> Effect Unit
     }
 createDistinct init = do
   signal <- create init
