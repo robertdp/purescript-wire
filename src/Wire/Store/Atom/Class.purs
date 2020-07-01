@@ -4,7 +4,10 @@ import Prelude
 import Effect (Effect)
 import Wire.Store.Atom.Types (AtomSignal)
 
-class Atom (atom :: Symbol -> Type -> Type) where
-  create :: forall key value. atom key value -> Effect (AtomSignal value)
-  reset :: forall key value. atom key value -> AtomSignal value -> Effect Unit
-  update :: forall key value. atom key value -> value -> AtomSignal value -> Effect Unit
+class Atom (atom :: Type -> Type) where
+  toStoreKey :: forall value. atom value -> String
+  defaultValue :: forall value. atom value -> value
+  isInitialised :: forall value. atom value -> Effect Boolean
+  initialise :: forall value. atom value -> AtomSignal value -> Effect Unit
+  resetValue :: forall value. atom value -> AtomSignal value -> Effect Unit
+  updateValue :: forall value. atom value -> value -> AtomSignal value -> Effect Unit

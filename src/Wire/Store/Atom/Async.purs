@@ -4,36 +4,55 @@ import Prelude
 import Control.Monad.Free.Trans (FreeT)
 import Effect (Effect)
 import Effect.Aff (Aff, launchAff_)
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
+import Effect.Unsafe (unsafePerformEffect)
 import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
 import Wire.Store.Atom.Types (AtomicF, AtomSignal, Action(..), interpret)
 
-newtype Async (key :: Symbol) value
+newtype Async value
   = Async
-  { default :: value
+  { key :: String
+  , default :: value
   , handler :: Action value -> Handler value
+  , initialised :: Ref Boolean
   }
 
-new ::
-  forall value key.
+create ::
+  forall value.
   { default :: value
   , handler :: Action value -> FreeT (AtomicF value) Aff Unit
+  , key :: String
   } ->
-  Async key value
-new = Async
+  Effect (Async value)
+create { key, default, handler } = do
+  initialised <- Ref.new false
+  pure $ Async { key, initialised, default, handler }
+
+unsafeCreate ::
+  forall value.
+  { default :: value
+  , handler :: Action value -> FreeT (AtomicF value) Aff Unit
+  , key :: String
+  } ->
+  Async value
+unsafeCreate = unsafePerformEffect <<< create
 
 type Handler a
   = FreeT (AtomicF a) Aff Unit
 
 instance atomAsync :: Atom Async where
-  create (Async { default, handler }) = do
-    signal <- Signal.create default
-    run (handler Initialize) signal
-    pure signal
-  reset (Async { default, handler }) signal = do
-    signal.write default
-    run (handler Initialize) signal
-  update (Async { handler }) value = run (handler (Update value))
+  toStoreKey (Async atom) = atom.key
+  defaultValue (Async atom) = atom.default
+  isInitialised (Async atom) = Ref.read atom.initialised
+  initialise (Async atom) signal = do
+    Ref.write true atom.initialised
+    run (atom.handler Initialize) signal
+  resetValue (Async atom) signal = do
+    signal.write atom.default
+    run (atom.handler Initialize) signal
+  updateValue (Async atom) value = run (atom.handler (Update value))
 
 run :: forall a. Handler a -> AtomSignal a -> Effect Unit
 run handler signal = launchAff_ $ interpret signal handler

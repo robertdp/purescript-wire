@@ -1,74 +1,62 @@
 module Wire.Store where
 
 import Prelude
-import Data.Maybe (fromJust)
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Foldable (traverse_)
+import Data.Maybe (Maybe(..))
 import Effect (Effect)
+import Effect.Console as Console
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
+import Effect.Unsafe (unsafePerformEffect)
 import Foreign (Foreign)
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Partial.Unsafe (unsafePartial)
-import Prim.Row (class Cons)
 import Unsafe.Coerce (unsafeCoerce)
+import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
 import Wire.Store.Atom.Class as Class
 import Wire.Store.Atom.Types (AtomSignal)
 
-newtype Store atoms
-  = Store { atoms :: Object Foreign }
+newtype Store
+  = Store { atoms :: Ref (Object Foreign) }
 
-empty :: Store {}
-empty = Store { atoms: Object.empty }
+create :: Effect Store
+create = do
+  atoms <- Ref.new Object.empty
+  pure $ Store { atoms }
 
-insertAtom ::
-  forall key value before after atom.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value before after =>
-  atom key value ->
-  Store { | before } ->
-  Effect (Store { | after })
-insertAtom atom (Store store) = do
-  signal <- Class.create atom
-  pure
-    $ Store
-        store
-          { atoms =
-            Object.insert (reflectSymbol (SProxy :: _ key))
-              ((unsafeCoerce :: forall a. AtomSignal a -> Foreign) signal)
-              store.atoms
-          }
+toForeign :: forall atom value. Atom atom => atom value -> AtomSignal value -> Foreign
+toForeign _ = unsafeCoerce
 
-getAtom ::
-  forall key value atoms r atom.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value r atoms =>
-  atom key value ->
-  Store { | atoms } ->
-  AtomSignal value
-getAtom _ (Store { atoms }) =
-  (unsafeCoerce :: forall a. Foreign -> AtomSignal a)
-    $ unsafePartial fromJust
-    $ Object.lookup (reflectSymbol (SProxy :: _ key)) atoms
+fromForeign :: forall atom value. Atom atom => atom value -> Foreign -> AtomSignal value
+fromForeign _ = unsafeCoerce
 
-resetAtom ::
-  forall key value atoms r atom.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value r atoms =>
-  atom key value ->
-  Store { | atoms } ->
-  Effect Unit
-resetAtom atom = getAtom atom >>> Class.reset atom
+lookup :: forall value atom. Atom atom => atom value -> Store -> Effect (Maybe (AtomSignal value))
+lookup atom (Store store) = do
+  let
+    storeKey = Class.toStoreKey atom
+  storedSignal <- map (fromForeign atom) <<< Object.lookup storeKey <$> Ref.read store.atoms
+  isInitialised <- Class.isInitialised atom
+  case storedSignal, isInitialised of
+    Just signal, true -> do
+      pure $ pure signal
+    Nothing, false -> do
+      signal <- Signal.create $ Class.defaultValue atom
+      Ref.modify_ (Object.insert storeKey (toForeign atom signal)) store.atoms
+      Class.initialise atom signal
+      pure $ pure signal
+    Nothing, true -> do
+      Console.warn $ "The atom " <> show storeKey <> " has been initialised but cannot be found in the store."
+      pure Nothing
+    Just _, false -> do
+      Console.warn $ "A different atom with the key " <> show storeKey <> " is already in the store."
+      pure Nothing
 
-updateAtom ::
-  forall key value atoms r atom.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value r atoms =>
-  atom key value ->
-  value ->
-  Store { | atoms } ->
-  Effect Unit
-updateAtom atom value = getAtom atom >>> Class.update atom value
+unsafeLookup :: forall atom value. Atom atom => atom value -> Store -> Maybe (AtomSignal value)
+unsafeLookup atom store = unsafePerformEffect $ lookup atom store
+
+reset :: forall atom value. Atom atom => atom value -> Store -> Effect Unit
+reset atom store = lookup atom store >>= traverse_ (Class.resetValue atom)
+
+update :: forall atom value. Atom atom => atom value -> value -> Store -> Effect Unit
+update atom value store = lookup atom store >>= traverse_ (Class.updateValue atom value)

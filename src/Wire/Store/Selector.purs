@@ -5,69 +5,50 @@ import Control.Monad.Free.Trans (FreeT, freeT, runFreeT)
 import Control.Monad.Rec.Class (class MonadRec)
 import Control.Monad.Trans.Class (lift)
 import Data.Either (Either(..))
-import Data.Symbol (class IsSymbol)
+import Data.Maybe (maybe')
 import Effect (Effect)
-import Prim.Row (class Cons)
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
 import Wire.Store (Store)
 import Wire.Store as Store
 import Wire.Store.Atom.Class (class Atom)
+import Wire.Store.Atom.Class as Class
 
-newtype Selector atoms a
+newtype Selector a
   = Selector
-  { select :: FreeT (SelectF atoms) Signal a
-  , update :: a -> FreeT (SelectF atoms) Effect Unit
+  { select :: FreeT StoreF Signal a
+  , update :: a -> FreeT StoreF Effect Unit
   }
 
 makeSelector ::
-  forall a atoms.
-  { select :: FreeT (SelectF atoms) Signal a
-  , update :: a -> FreeT (SelectF atoms) Effect Unit
+  forall a.
+  { select :: FreeT StoreF Signal a
+  , update :: a -> FreeT StoreF Effect Unit
   } ->
-  Selector atoms a
+  Selector a
 makeSelector = Selector
 
-data SelectF atoms next
-  = Apply (Store atoms -> next)
+data StoreF next
+  = Apply (Store -> next)
 
-derive instance functorSelectF :: Functor (SelectF atoms)
+derive instance functorStoreF :: Functor StoreF
 
-select ::
-  forall atom key r atoms value.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value r atoms =>
-  atom key value ->
-  FreeT (SelectF { | atoms }) Signal value
-select atom = freeT \_ -> pure $ Right $ Apply \store -> lift (Store.getAtom atom store).signal
+select :: forall atom value. Atom atom => atom value -> FreeT StoreF Signal value
+select atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.defaultValue atom) _.signal $ Store.unsafeLookup atom store
 
-read ::
-  forall atom value r atoms key.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value r atoms =>
-  atom key value ->
-  FreeT (SelectF { | atoms }) Effect value
-read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ Signal.read (Store.getAtom atom store).signal
+read :: forall atom value. Atom atom => atom value -> FreeT StoreF Effect value
+read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.defaultValue atom) (Signal.read <<< _.signal) $ Store.unsafeLookup atom store
 
-write ::
-  forall atom r atoms value key.
-  Atom atom =>
-  IsSymbol key =>
-  Cons key value r atoms =>
-  atom key value ->
-  value ->
-  FreeT (SelectF { | atoms }) Effect Unit
-write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.updateAtom atom value store
+write :: forall atom value. Atom atom => atom value -> value -> FreeT StoreF Effect Unit
+write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.update atom value store
 
-interpret :: forall a m atoms. MonadRec m => Store { | atoms } -> FreeT (SelectF { | atoms }) m a -> m a
+interpret :: forall a m. MonadRec m => Store -> FreeT StoreF m a -> m a
 interpret store = runFreeT \(Apply run) -> pure (run store)
 
 build ::
-  forall a atoms.
-  Selector { | atoms } a ->
-  Store { | atoms } ->
+  forall a.
+  Selector a ->
+  Store ->
   { signal :: Signal a
   , write :: a -> Effect Unit
   }

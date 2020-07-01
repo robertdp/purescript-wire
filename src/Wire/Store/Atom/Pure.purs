@@ -1,18 +1,41 @@
 module Wire.Store.Atom.Pure where
 
 import Prelude
-import Wire.Signal as Signal
+import Effect (Effect)
+import Effect.Ref (Ref)
+import Effect.Ref as Ref
+import Effect.Unsafe (unsafePerformEffect)
 import Wire.Store.Atom.Class (class Atom)
 
-newtype Pure (key :: Symbol) value
-  = Pure value
+newtype Pure value
+  = Pure
+  { key :: String
+  , default :: value
+  , initialised :: Ref Boolean
+  }
 
-new :: forall value key. value -> Pure key value
-new = Pure
+create ::
+  forall value.
+  { default :: value
+  , key :: String
+  } ->
+  Effect (Pure value)
+create { key, default } = do
+  initialised <- Ref.new false
+  pure $ Pure { key, default, initialised }
+
+unsafeCreate ::
+  forall value.
+  { default :: value
+  , key :: String
+  } ->
+  Pure value
+unsafeCreate = unsafePerformEffect <<< create
 
 instance atomPure :: Atom Pure where
-  create (Pure value) = do
-    signal <- Signal.create value
-    pure signal
-  reset (Pure value) signal = signal.write value
-  update _ value signal = signal.write value
+  toStoreKey (Pure atom) = atom.key
+  defaultValue (Pure atom) = atom.default
+  isInitialised (Pure atom) = Ref.read atom.initialised
+  initialise (Pure atom) _ = Ref.write true atom.initialised
+  resetValue (Pure atom) signal = signal.write atom.default
+  updateValue _ value signal = signal.write value
