@@ -34,10 +34,7 @@ newtype UseAtom a hooks
   = UseAtom
   ( UseEffect Unit
       ( UseState a
-          ( UseLazy Unit
-              { signal :: Signal a
-              , write :: a -> Effect Unit
-              }
+          ( UseLazy Unit { signal :: Signal a, write :: a -> Effect Unit }
               (UseContext Store hooks)
           )
       )
@@ -91,10 +88,7 @@ newtype UseSelector a hooks
   = UseSelector
   ( UseEffect Unit
       ( UseState a
-          ( UseLazy Unit
-              { signal :: Signal a
-              , write :: a -> Effect Unit
-              }
+          ( UseLazy Unit { signal :: Signal a, write :: a -> Effect Unit }
               (UseContext Store hooks)
           )
       )

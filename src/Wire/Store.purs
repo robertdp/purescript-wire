@@ -20,7 +20,7 @@ import Wire.Store.Atom.Class as Class
 import Wire.Store.Atom.Types (AtomSignal)
 
 newtype Store
-  = Store { atoms :: Ref (Object Foreign) }
+  = Store { atoms :: Ref (Object (AtomSignal Foreign)) }
 
 context :: ReactContext Store
 context = unsafePerformEffect $ React.createContext =<< create
@@ -30,10 +30,10 @@ create = do
   atoms <- Ref.new Object.empty
   pure $ Store { atoms }
 
-toForeign :: forall atom value. Atom atom => atom value -> AtomSignal value -> Foreign
+toForeign :: forall atom value. Atom atom => atom value -> AtomSignal value -> AtomSignal Foreign
 toForeign _ = unsafeCoerce
 
-fromForeign :: forall atom value. Atom atom => atom value -> Foreign -> AtomSignal value
+fromForeign :: forall atom value. Atom atom => atom value -> AtomSignal Foreign -> AtomSignal value
 fromForeign _ = unsafeCoerce
 
 lookup :: forall value atom. Atom atom => atom value -> Store -> Effect (Maybe (AtomSignal value))
