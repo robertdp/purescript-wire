@@ -34,10 +34,10 @@ data StoreF next
 derive instance functorStoreF :: Functor StoreF
 
 select :: forall atom value. Atom atom => atom value -> FreeT StoreF Signal value
-select atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.defaultValue atom) _.signal $ Store.unsafeLookup atom store
+select atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.initialValue atom) _.signal $ Store.unsafeLookup atom store
 
 read :: forall atom value. Atom atom => atom value -> FreeT StoreF Effect value
-read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.defaultValue atom) (Signal.read <<< _.signal) $ Store.unsafeLookup atom store
+read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.initialValue atom) (Signal.read <<< _.signal) $ Store.unsafeLookup atom store
 
 write :: forall atom value. Atom atom => atom value -> value -> FreeT StoreF Effect Unit
 write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.update atom value store

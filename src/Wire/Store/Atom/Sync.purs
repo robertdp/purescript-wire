@@ -6,14 +6,13 @@ import Effect (Effect)
 import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
-import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
 import Wire.Store.Atom.Types (AtomicF, AtomSignal, Action(..), interpret)
 
 newtype Sync value
   = Sync
   { key :: String
-  , default :: value
+  , initial :: value
   , handler :: Action value -> Handler value
   , initialised :: Ref Boolean
   }
@@ -23,18 +22,18 @@ type Handler a
 
 create ::
   forall value.
-  { default :: value
+  { initial :: value
   , handler :: Action value -> FreeT (AtomicF value) Effect Unit
   , key :: String
   } ->
   Effect (Sync value)
-create { key, default, handler } = do
+create { key, initial, handler } = do
   initialised <- Ref.new false
-  pure $ Sync { key, initialised, default, handler }
+  pure $ Sync { key, initialised, initial, handler }
 
 unsafeCreate ::
   forall value.
-  { default :: value
+  { initial :: value
   , handler :: Action value -> FreeT (AtomicF value) Effect Unit
   , key :: String
   } ->
@@ -42,16 +41,16 @@ unsafeCreate ::
 unsafeCreate = unsafePerformEffect <<< create
 
 instance atomSync :: Atom Sync where
-  toStoreKey (Sync atom) = atom.key
-  defaultValue (Sync atom) = atom.default
+  storeKey (Sync atom) = atom.key
+  initialValue (Sync atom) = atom.initial
   isInitialised (Sync atom) = Ref.read atom.initialised
   initialise (Sync atom) signal = do
     Ref.write true atom.initialised
     run (atom.handler Initialize) signal
-  resetValue (Sync atom) signal = do
-    signal.write atom.default
+  reset (Sync atom) signal = do
+    signal.write atom.initial
     run (atom.handler Initialize) signal
-  updateValue (Sync atom) value = run (atom.handler (Update value))
+  update (Sync atom) value = run (atom.handler (Update value))
 
 run :: forall a. Handler a -> AtomSignal a -> Effect Unit
 run = flip interpret

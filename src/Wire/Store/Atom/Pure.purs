@@ -10,32 +10,32 @@ import Wire.Store.Atom.Class (class Atom)
 newtype Pure value
   = Pure
   { key :: String
-  , default :: value
+  , initial :: value
   , initialised :: Ref Boolean
   }
 
 create ::
   forall value.
-  { default :: value
+  { initial :: value
   , key :: String
   } ->
   Effect (Pure value)
-create { key, default } = do
+create { key, initial } = do
   initialised <- Ref.new false
-  pure $ Pure { key, default, initialised }
+  pure $ Pure { key, initial, initialised }
 
 unsafeCreate ::
   forall value.
-  { default :: value
+  { initial :: value
   , key :: String
   } ->
   Pure value
 unsafeCreate = unsafePerformEffect <<< create
 
 instance atomPure :: Atom Pure where
-  toStoreKey (Pure atom) = atom.key
-  defaultValue (Pure atom) = atom.default
+  storeKey (Pure atom) = atom.key
+  initialValue (Pure atom) = atom.initial
   isInitialised (Pure atom) = Ref.read atom.initialised
   initialise (Pure atom) _ = Ref.write true atom.initialised
-  resetValue (Pure atom) signal = signal.write atom.default
-  updateValue _ value signal = signal.write value
+  reset (Pure atom) signal = signal.write atom.initial
+  update _ value signal = signal.write value
