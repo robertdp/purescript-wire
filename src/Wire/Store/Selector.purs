@@ -1,4 +1,4 @@
-module Wire.Store.Selector where
+module Wire.Store.Selector (Selector, makeSelector, StoreF, select, read, write, build) where
 
 import Prelude
 import Control.Monad.Free.Trans (FreeT, freeT, runFreeT)
@@ -35,7 +35,7 @@ read :: forall atom value. Atom atom => atom value -> FreeT StoreF Effect value
 read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.initialValue atom) (Signal.read <<< _.signal) $ Store.unsafeLookup atom store
 
 write :: forall atom value. Atom atom => atom value -> value -> FreeT StoreF Effect Unit
-write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.update atom value store
+write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.update atom store value
 
 interpret :: forall a m. MonadRec m => Store -> FreeT StoreF m a -> m a
 interpret store = runFreeT \(Apply run) -> pure (run store)

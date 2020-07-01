@@ -1,4 +1,4 @@
-module Wire.Store.Atom.Pure where
+module Wire.Store.Atom.Pure (Pure, create, unsafeCreate) where
 
 import Prelude
 import Effect (Effect)

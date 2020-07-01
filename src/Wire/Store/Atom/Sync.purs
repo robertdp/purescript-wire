@@ -1,4 +1,4 @@
-module Wire.Store.Atom.Sync where
+module Wire.Store.Atom.Sync (Sync, create, unsafeCreate) where
 
 import Prelude
 import Control.Monad.Free.Trans (FreeT)
@@ -7,7 +7,7 @@ import Effect.Ref (Ref)
 import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
 import Wire.Store.Atom.Class (class Atom)
-import Wire.Store.Atom.Types (AtomicF, AtomSignal, Action(..), interpret)
+import Wire.Store.Atom (AtomicF, AtomSignal, Action(..), interpret)
 
 newtype Sync value
   = Sync

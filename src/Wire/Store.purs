@@ -1,4 +1,4 @@
-module Wire.Store where
+module Wire.Store (Store, context, create, lookup, unsafeLookup, reset, update) where
 
 import Prelude
 import Data.Foldable (traverse_)
@@ -15,9 +15,9 @@ import React.Basic (ReactContext)
 import React.Basic as React
 import Unsafe.Coerce (unsafeCoerce)
 import Wire.Signal as Signal
+import Wire.Store.Atom (AtomSignal)
 import Wire.Store.Atom.Class (class Atom)
 import Wire.Store.Atom.Class as Class
-import Wire.Store.Atom.Types (AtomSignal)
 
 newtype Store
   = Store { atoms :: Ref (Object (AtomSignal Foreign)) }
@@ -63,5 +63,5 @@ unsafeLookup atom store = unsafePerformEffect $ lookup atom store
 reset :: forall atom value. Atom atom => atom value -> Store -> Effect Unit
 reset atom store = lookup atom store >>= traverse_ (Class.reset atom)
 
-update :: forall atom value. Atom atom => atom value -> value -> Store -> Effect Unit
-update atom value store = lookup atom store >>= traverse_ (Class.update atom value)
+update :: forall atom value. Atom atom => atom value -> Store -> value -> Effect Unit
+update atom store value = lookup atom store >>= traverse_ (Class.update atom value)

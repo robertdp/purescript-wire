@@ -49,7 +49,7 @@ useAtom atom =
     { signal, write } <- lookupAtom atom store
     value /\ setValue <- React.useState' $ unsafePerformEffect $ Signal.read signal
     React.useEffectOnce $ Signal.subscribe signal setValue
-    pure $ value /\ write
+    pure $ value /\ Store.update atom store
 
 useAtomValue :: forall a atom. Atom atom => atom a -> Hook (UseAtom a) a
 useAtomValue atom = fst <$> useAtom atom
@@ -63,7 +63,7 @@ useResetAtom atom =
     React.useEffectOnce do
       Store.reset atom store
       Signal.subscribe signal setValue
-    pure $ value /\ write
+    pure $ value /\ Store.update atom store
 
 useResetAtomValue :: forall a atom. Atom atom => atom a -> Hook (UseAtom a) a
 useResetAtomValue atom = fst <$> useAtom atom

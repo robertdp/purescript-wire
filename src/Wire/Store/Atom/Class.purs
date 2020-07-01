@@ -2,7 +2,7 @@ module Wire.Store.Atom.Class where
 
 import Prelude
 import Effect (Effect)
-import Wire.Store.Atom.Types (AtomSignal)
+import Wire.Store.Atom (AtomSignal)
 
 class Atom (atom :: Type -> Type) where
   storeKey :: forall value. atom value -> String
