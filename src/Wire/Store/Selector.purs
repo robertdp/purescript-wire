@@ -20,12 +20,7 @@ newtype Selector a
   , update :: a -> FreeT StoreF Effect Unit
   }
 
-makeSelector ::
-  forall a.
-  { select :: FreeT StoreF Signal a
-  , update :: a -> FreeT StoreF Effect Unit
-  } ->
-  Selector a
+makeSelector :: forall a. { select :: FreeT StoreF Signal a, update :: a -> FreeT StoreF Effect Unit } -> Selector a
 makeSelector = Selector
 
 data StoreF next
@@ -45,13 +40,7 @@ write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.updat
 interpret :: forall a m. MonadRec m => Store -> FreeT StoreF m a -> m a
 interpret store = runFreeT \(Apply run) -> pure (run store)
 
-build ::
-  forall a.
-  Selector a ->
-  Store ->
-  { signal :: Signal a
-  , write :: a -> Effect Unit
-  }
+build :: forall a. Selector a -> Store -> { signal :: Signal a, write :: a -> Effect Unit }
 build (Selector selector) store =
   { signal: interpret store selector.select
   , write: \a -> interpret store (selector.update a)
