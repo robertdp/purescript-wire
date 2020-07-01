@@ -51,17 +51,37 @@ useAtom atom =
     store <- React.useContext Store.context
     { signal, write } <-
       React.useLazy unit \_ -> case Store.unsafeLookup atom store of
+        Just storedSignal -> storedSignal
         Nothing ->
           { signal: pure $ Atom.initialValue atom
           , write: mempty
           }
-        Just storedSignal -> storedSignal
     value /\ setValue <- React.useState' $ unsafePerformEffect $ Signal.read signal
     React.useEffectOnce $ Signal.subscribe signal setValue
     pure $ value /\ write
 
 useAtomValue :: forall a atom. Atom atom => atom a -> Hook (UseAtom a) a
 useAtomValue atom = fst <$> useAtom atom
+
+useResetAtom :: forall atom a. Atom atom => atom a -> Hook (UseAtom a) (a /\ (a -> Effect Unit))
+useResetAtom atom =
+  React.coerceHook React.do
+    store <- React.useContext Store.context
+    { signal, write } <-
+      React.useLazy unit \_ -> case Store.unsafeLookup atom store of
+        Just storedSignal -> storedSignal
+        Nothing ->
+          { signal: pure $ Atom.initialValue atom
+          , write: mempty
+          }
+    value /\ setValue <- React.useState' $ Atom.initialValue atom
+    React.useEffectOnce do
+      Store.reset atom store
+      Signal.subscribe signal setValue
+    pure $ value /\ write
+
+useResetAtomValue :: forall a atom. Atom atom => atom a -> Hook (UseAtom a) a
+useResetAtomValue atom = fst <$> useAtom atom
 
 newtype UseSelector a hooks
   = UseSelector
