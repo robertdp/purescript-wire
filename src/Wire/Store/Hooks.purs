@@ -49,13 +49,7 @@ useAtom :: forall atom a. Atom atom => atom a -> Hook (UseAtom a) (a /\ (a -> Ef
 useAtom atom =
   React.coerceHook React.do
     store <- React.useContext Store.context
-    { signal, write } <-
-      React.useLazy unit \_ -> case Store.unsafeLookup atom store of
-        Just storedSignal -> storedSignal
-        Nothing ->
-          { signal: pure $ Atom.initialValue atom
-          , write: mempty
-          }
+    { signal, write } <- lookupAtom atom store
     value /\ setValue <- React.useState' $ unsafePerformEffect $ Signal.read signal
     React.useEffectOnce $ Signal.subscribe signal setValue
     pure $ value /\ write
@@ -67,13 +61,7 @@ useResetAtom :: forall atom a. Atom atom => atom a -> Hook (UseAtom a) (a /\ (a 
 useResetAtom atom =
   React.coerceHook React.do
     store <- React.useContext Store.context
-    { signal, write } <-
-      React.useLazy unit \_ -> case Store.unsafeLookup atom store of
-        Just storedSignal -> storedSignal
-        Nothing ->
-          { signal: pure $ Atom.initialValue atom
-          , write: mempty
-          }
+    { signal, write } <- lookupAtom atom store
     value /\ setValue <- React.useState' $ Atom.initialValue atom
     React.useEffectOnce do
       Store.reset atom store
@@ -82,6 +70,22 @@ useResetAtom atom =
 
 useResetAtomValue :: forall a atom. Atom atom => atom a -> Hook (UseAtom a) a
 useResetAtomValue atom = fst <$> useAtom atom
+
+lookupAtom ::
+  forall a atom.
+  Atom atom =>
+  atom a ->
+  Store ->
+  Hook
+    (UseLazy Unit { signal :: Signal a, write :: a -> Effect Unit })
+    { signal :: Signal a, write :: a -> Effect Unit }
+lookupAtom atom store =
+  React.useLazy unit \_ -> case Store.unsafeLookup atom store of
+    Just storedSignal -> storedSignal
+    Nothing ->
+      { signal: pure $ Atom.initialValue atom
+      , write: mempty
+      }
 
 newtype UseSelector a hooks
   = UseSelector
