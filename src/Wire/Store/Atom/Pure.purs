@@ -1,41 +1,31 @@
-module Wire.Store.Atom.Pure (Pure, create, unsafeCreate) where
+module Wire.Store.Atom.Pure where
 
 import Prelude
 import Effect (Effect)
-import Effect.Ref (Ref)
-import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
+import Wire.Event as Event
+import Wire.Signal (Signal)
+import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
 
-newtype Pure value
+newtype Pure a
   = Pure
-  { key :: String
-  , initial :: value
-  , initialised :: Ref Boolean
+  { initial :: a
+  , signal :: Signal a
   }
 
-create ::
-  forall value.
-  { initial :: value
-  , key :: String
-  } ->
-  Effect (Pure value)
-create { key, initial } = do
-  initialised <- Ref.new false
-  pure $ Pure { key, initial, initialised }
+create :: forall a. a -> Effect (Pure a)
+create initial = do
+  signal <- Signal.create initial
+  pure $ Pure { initial, signal }
 
-unsafeCreate ::
-  forall value.
-  { initial :: value
-  , key :: String
-  } ->
-  Pure value
+unsafeCreate :: forall a. a -> Pure a
 unsafeCreate = unsafePerformEffect <<< create
 
 instance atomPure :: Atom Pure where
-  storeKey (Pure atom) = atom.key
-  initialValue (Pure atom) = atom.initial
-  isInitialised (Pure atom) = Ref.read atom.initialised
-  initialise (Pure atom) _ = Ref.write true atom.initialised
-  reset (Pure atom) signal = signal.write atom.initial
-  update _ value signal = signal.write value
+  default (Pure atom) = atom.initial
+  read (Pure atom) = atom.signal.read
+  modify f (Pure atom) = atom.signal.modify f
+  reset (Pure atom) = atom.signal.modify (const atom.initial)
+  subscribe k (Pure atom) = Event.subscribe atom.signal.event k
+  signal (Pure atom) = atom.signal

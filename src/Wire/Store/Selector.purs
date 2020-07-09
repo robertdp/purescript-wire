@@ -1,47 +1,80 @@
-module Wire.Store.Selector (Selector, makeSelector, StoreF, select, read, write, build) where
+module Wire.Store.Selector where
 
 import Prelude
-import Control.Monad.Free.Trans (FreeT, freeT, runFreeT)
-import Control.Monad.Rec.Class (class MonadRec)
-import Control.Monad.Trans.Class (lift)
-import Data.Either (Either(..))
-import Data.Maybe (maybe')
+import Control.Monad.Free (Free, liftF, runFreeM)
 import Effect (Effect)
+import Effect.Unsafe (unsafePerformEffect)
+import Wire.Event (Event)
+import Wire.Event as Event
 import Wire.Signal (Signal)
-import Wire.Signal as Signal
-import Wire.Store (Store)
-import Wire.Store as Store
 import Wire.Store.Atom.Class (class Atom)
-import Wire.Store.Atom.Class as Class
+import Wire.Store.Atom.Class as Atom
 
 newtype Selector a
   = Selector
-  { select :: FreeT StoreF Signal a
-  , update :: a -> FreeT StoreF Effect Unit
+  { initial :: a
+  , signal :: Signal a
   }
 
-makeSelector :: forall a. { select :: FreeT StoreF Signal a, update :: a -> FreeT StoreF Effect Unit } -> Selector a
-makeSelector = Selector
+create ::
+  forall a.
+  { select :: Free Select a
+  , update :: a -> Free Update Unit
+  } ->
+  Effect (Selector a)
+create { select: select', update } = do
+  let
+    event = runEvent select'
 
-data StoreF next
-  = Apply (Store -> next)
+    read' = runRead select'
 
-derive instance functorStoreF :: Functor StoreF
+    modify' f = read' >>= runUpdate <<< update <<< f
+  initial <- read'
+  pure $ Selector { initial, signal: { event, read: read', modify: modify' } }
 
-select :: forall atom value. Atom atom => atom value -> FreeT StoreF Signal value
-select atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.initialValue atom) _.signal $ Store.unsafeLookup atom store
+unsafeCreate ::
+  forall a.
+  { select :: Free Select a
+  , update :: a -> Free Update Unit
+  } ->
+  Selector a
+unsafeCreate = unsafePerformEffect <<< create
 
-read :: forall atom value. Atom atom => atom value -> FreeT StoreF Effect value
-read atom = freeT \_ -> pure $ Right $ Apply \store -> lift $ maybe' (\_ -> pure $ Class.initialValue atom) (Signal.read <<< _.signal) $ Store.unsafeLookup atom store
+instance atomSelector :: Atom Selector where
+  default (Selector atom) = atom.initial
+  read (Selector atom) = atom.signal.read
+  modify f (Selector atom) = atom.signal.modify f
+  reset _ = mempty
+  subscribe notify (Selector atom) = Event.subscribe atom.signal.event notify
+  signal (Selector atom) = atom.signal
 
-write :: forall atom value. Atom atom => atom value -> value -> FreeT StoreF Effect Unit
-write atom value = freeT \_ -> pure $ Right $ Apply \store -> lift $ Store.update atom store value
+newtype Select next
+  = Select { event :: Event next, read :: Effect next }
 
-interpret :: forall a m. MonadRec m => Store -> FreeT StoreF m a -> m a
-interpret store = runFreeT \(Apply run) -> pure (run store)
+derive instance functorSelect :: Functor Select
 
-build :: forall a. Selector a -> Store -> { signal :: Signal a, write :: a -> Effect Unit }
-build (Selector selector) store =
-  { signal: interpret store selector.select
-  , write: \a -> interpret store (selector.update a)
-  }
+runEvent :: forall a. Free Select a -> Event a
+runEvent = runFreeM case _ of Select s -> s.event
+
+runRead :: forall a. Free Select a -> Effect a
+runRead = runFreeM case _ of Select s -> s.read
+
+select :: forall value atom. Atom atom => atom value -> Free Select value
+select = \atom -> liftF $ Select { event: (Atom.signal atom).event, read: Atom.read atom }
+
+data Update next
+  = Update (Effect next)
+
+derive instance functorUpdate :: Functor Update
+
+runUpdate :: forall a. Free Update a -> Effect a
+runUpdate = runFreeM case _ of Update next -> next
+
+read :: forall atom value. Atom atom => atom value -> Free Update value
+read atom = liftF $ Update $ Atom.read atom
+
+modify :: forall atom value. Atom atom => (value -> value) -> atom value -> Free Update Unit
+modify f atom = liftF $ Update $ Atom.modify f atom
+
+write :: forall atom value. Atom atom => value -> atom value -> Free Update Unit
+write = modify <<< const

@@ -1,56 +1,48 @@
-module Wire.Store.Atom.Sync (Sync, create, unsafeCreate) where
+module Wire.Store.Atom.Sync where
 
 import Prelude
-import Control.Monad.Free.Trans (FreeT)
 import Effect (Effect)
-import Effect.Ref (Ref)
-import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
+import Wire.Event as Event
+import Wire.Signal (Signal)
+import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
-import Wire.Store.Atom (AtomicF, AtomSignal, Action(..), interpret)
 
-newtype Sync value
+newtype Sync a
   = Sync
-  { key :: String
-  , initial :: value
-  , handler :: Action value -> Handler value
-  , initialised :: Ref Boolean
+  { initial :: a
+  , load :: Effect a
+  , save :: a -> Effect Unit
+  , signal :: Signal a
   }
 
-type Handler a
-  = FreeT (AtomicF a) Effect Unit
-
 create ::
-  forall value.
-  { initial :: value
-  , handler :: Action value -> FreeT (AtomicF value) Effect Unit
-  , key :: String
+  forall a.
+  { load :: Effect a
+  , save :: a -> Effect Unit
   } ->
-  Effect (Sync value)
-create { key, initial, handler } = do
-  initialised <- Ref.new false
-  pure $ Sync { key, initialised, initial, handler }
+  Effect (Sync a)
+create { load, save } = do
+  initial <- load
+  signal <- Signal.create initial
+  pure $ Sync { initial, load, save, signal }
 
 unsafeCreate ::
-  forall value.
-  { initial :: value
-  , handler :: Action value -> FreeT (AtomicF value) Effect Unit
-  , key :: String
+  forall a.
+  { load :: Effect a
+  , save :: a -> Effect Unit
   } ->
-  Sync value
+  Sync a
 unsafeCreate = unsafePerformEffect <<< create
 
 instance atomSync :: Atom Sync where
-  storeKey (Sync atom) = atom.key
-  initialValue (Sync atom) = atom.initial
-  isInitialised (Sync atom) = Ref.read atom.initialised
-  initialise (Sync atom) signal = do
-    Ref.write true atom.initialised
-    run (atom.handler Initialize) signal
-  reset (Sync atom) signal = do
-    signal.write atom.initial
-    run (atom.handler Initialize) signal
-  update (Sync atom) value = run (atom.handler (Update value))
-
-run :: forall a. Handler a -> AtomSignal a -> Effect Unit
-run = flip interpret
+  default (Sync atom) = atom.initial
+  read (Sync atom) = atom.signal.read
+  modify f (Sync atom) = do
+    atom.signal.modify f
+    atom.signal.read >>= atom.save
+  reset (Sync atom) = do
+    value <- atom.load
+    atom.signal.modify (const value)
+  subscribe notify (Sync atom) = Event.subscribe atom.signal.event notify
+  signal (Sync atom) = atom.signal

@@ -1,57 +1,75 @@
-module Wire.Store.Atom.Async (Async, create, unsafeCreate) where
+module Wire.Store.Atom.Async where
 
 import Prelude
-import Control.Monad.Free.Trans (FreeT)
+import Data.Foldable (for_)
+import Data.Maybe (Maybe(..), isJust)
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
-import Effect.Ref (Ref)
+import Effect.Aff (Aff)
+import Effect.Aff as Aff
+import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
+import Wire.Event as Event
+import Wire.Signal (Signal)
+import Wire.Signal as Signal
 import Wire.Store.Atom.Class (class Atom)
-import Wire.Store.Atom (AtomicF, AtomSignal, Action(..), interpret)
 
-newtype Async value
+newtype Async a
   = Async
-  { key :: String
-  , initial :: value
-  , handler :: Action value -> Handler value
-  , initialised :: Ref Boolean
+  { initial :: a
+  , load :: Effect Unit
+  , save :: a -> Effect Unit
+  , signal :: Signal a
   }
 
 create ::
-  forall value.
-  { initial :: value
-  , handler :: Action value -> FreeT (AtomicF value) Aff Unit
-  , key :: String
+  forall a.
+  { initial :: a
+  , load :: Aff a
+  , save :: a -> Aff Unit
   } ->
-  Effect (Async value)
-create { key, initial, handler } = do
-  initialised <- Ref.new false
-  pure $ Async { key, initialised, initial, handler }
+  Effect (Async a)
+create { initial, load, save } = do
+  signal <- Signal.create initial
+  loadFiber <- Ref.new Nothing
+  saveFiber <- Ref.new Nothing
+  let
+    load' = do
+      inProgress <- isJust <$> Ref.read loadFiber
+      unless inProgress do
+        fiber <-
+          Aff.launchAff do
+            value <- load
+            liftEffect $ signal.modify (const value)
+        Ref.write (Just fiber) loadFiber
+
+    save' value = do
+      inProgress <- isJust <$> Ref.read saveFiber
+      when inProgress do
+        oldFiber <- Ref.read saveFiber
+        for_ oldFiber (Aff.launchAff_ <<< Aff.killFiber (Aff.error "New save triggered, cancelling save in progress"))
+      fiber <- Aff.launchAff $ save value
+      Ref.write (Just fiber) loadFiber
+  load'
+  pure $ Async { initial, load: load', save: save', signal }
 
 unsafeCreate ::
-  forall value.
-  { initial :: value
-  , handler :: Action value -> FreeT (AtomicF value) Aff Unit
-  , key :: String
+  forall a.
+  { initial :: a
+  , load :: Aff a
+  , save :: a -> Aff Unit
   } ->
-  Async value
+  Async a
 unsafeCreate = unsafePerformEffect <<< create
 
-type Handler a
-  = FreeT (AtomicF a) Aff Unit
-
 instance atomAsync :: Atom Async where
-  storeKey (Async atom) = atom.key
-  initialValue (Async atom) = atom.initial
-  isInitialised (Async atom) = Ref.read atom.initialised
-  initialise (Async atom) signal = do
-    Ref.write true atom.initialised
-    run (atom.handler Initialize) signal
-  reset (Async atom) signal = do
-    signal.write atom.initial
-    run (atom.handler Initialize) signal
-  update (Async atom) value = run (atom.handler (Update value))
-
-run :: forall a. Handler a -> AtomSignal a -> Effect Unit
-run handler signal = launchAff_ $ interpret signal handler
+  default (Async atom) = atom.initial
+  read (Async atom) = atom.signal.read
+  modify f (Async atom) = do
+    atom.signal.modify f
+    atom.signal.read >>= atom.save
+  reset (Async atom) = do
+    atom.signal.modify (const atom.initial)
+    atom.load
+  subscribe notify (Async atom) = Event.subscribe atom.signal.event notify
+  signal (Async atom) = atom.signal

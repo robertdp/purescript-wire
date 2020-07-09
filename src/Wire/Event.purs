@@ -4,7 +4,7 @@ import Prelude
 import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus, empty)
 import Control.Apply (lift2)
-import Control.Monad.Rec.Class (Step(..), tailRecM)
+import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
 import Data.Array as Array
 import Data.Either (Either(..), either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
@@ -31,7 +31,7 @@ create = do
         let
           isUnsubscribing = Ref.read unsubscribing
 
-          subscriber = \a -> unlessM isUnsubscribing do notify a
+          subscriber = \a -> unlessM isUnsubscribing $ notify a
         Ref.modify_ (flip Array.snoc subscriber) subscribers
         pure do
           Ref.write true unsubscribing
@@ -43,8 +43,8 @@ create = do
 makeEvent :: forall a. ((a -> Effect Unit) -> Effect (Effect Unit)) -> Event a
 makeEvent = Event
 
-subscribe :: forall a. Event a -> (a -> Effect Unit) -> Effect (Effect Unit)
-subscribe (Event event) = event
+subscribe :: forall a b. Event a -> (a -> Effect b) -> Effect (Effect Unit)
+subscribe (Event event) = event <<< (void <<< _)
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a
 filter pred (Event event) = Event \notify -> event \a -> if pred a then notify a else pure unit
@@ -79,7 +79,7 @@ share source = do
       Event \notify -> do
         incrementCount
         cancel <- subscribe shared.event notify
-        pure do cancel *> decrementCount
+        pure $ cancel *> decrementCount
   pure event
 
 distinct :: forall a. Eq a => Event a -> Event a
@@ -107,12 +107,13 @@ fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
   Event \notify -> do
     fiber <-
-      Aff.launchAff do
-        for_ xs \x -> do
-          liftEffect $ notify x
-          Aff.delay (Milliseconds 0.0)
-    pure do
-      Aff.launchAff_ $ Aff.killFiber (Aff.error "canceled") fiber
+      Aff.launchAff
+        $ for_ xs \x -> do
+            liftEffect $ notify x
+            Aff.delay (Milliseconds 0.0)
+    pure
+      $ Aff.launchAff_
+      $ Aff.killFiber (Aff.error "canceled") fiber
 
 range :: Int -> Int -> Event Int
 range start end =
@@ -127,9 +128,10 @@ range start end =
       go _ = do
         liftEffect $ notify end
         pure (Done unit)
-    fiber <- Aff.launchAff do tailRecM go start
-    pure do
-      Aff.launchAff_ $ Aff.killFiber (Aff.error "canceled") fiber
+    fiber <- Aff.launchAff $ tailRecM go start
+    pure
+      $ Aff.launchAff_
+      $ Aff.killFiber (Aff.error "canceled") fiber
   where
   step = if start < end then 1 else -1
 
@@ -171,6 +173,15 @@ instance bindEvent :: Bind Event where
 
 instance monadEvent :: Monad Event
 
+instance monadRecEvent ∷ MonadRec Event where
+  tailRecM k = go
+    where
+    go a = do
+      res ← k a
+      case res of
+        Done r → pure r
+        Loop b → go b
+
 instance plusEvent :: Plus Event where
   empty = Event \_ -> mempty
 
@@ -181,7 +192,7 @@ instance altEvent :: Alt Event where
     Event \notify -> do
       cancel1 <- event1 notify
       cancel2 <- event2 notify
-      pure do cancel1 *> cancel2
+      pure $ cancel1 *> cancel2
 
 instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
   append = lift2 append
