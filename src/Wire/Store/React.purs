@@ -10,8 +10,8 @@ import React.Basic.Hooks (Hook, UseEffect, UseState)
 import React.Basic.Hooks as React
 import Wire.Event as Event
 import Wire.Signal (Signal)
-import Wire.Store.Atom.Class (class Atom)
-import Wire.Store.Atom.Class as Atom
+import Wire.React.Class (class Atom)
+import Wire.React.Class as Class
 
 newtype UseSignal a hooks
   = UseSignal (UseEffect Unit (UseState a hooks))
@@ -33,9 +33,9 @@ derive instance newtypeUseAtom :: Newtype (UseAtom a hooks) _
 useAtom :: forall atom a. Atom atom => atom a -> Hook (UseAtom a) (a /\ ((a -> a) -> Effect Unit))
 useAtom atom =
   React.coerceHook React.do
-    value /\ setValue <- React.useState' $ unsafePerformEffect $ Atom.read atom
-    React.useEffectOnce $ Event.subscribe (Atom.signal atom).event setValue
-    pure $ value /\ flip Atom.modify atom
+    value /\ setValue <- React.useState' $ unsafePerformEffect $ Class.read atom
+    React.useEffectOnce $ Event.subscribe (Class.signal atom).event setValue
+    pure $ value /\ flip Class.modify atom
 
 useAtomValue :: forall a atom. Atom atom => atom a -> Hook (UseAtom a) a
 useAtomValue atom = fst <$> useAtom atom
@@ -49,7 +49,7 @@ useAtomReset :: forall atom a. Atom atom => atom a -> Hook (UseAtomReset a) (a /
 useAtomReset atom =
   React.coerceHook React.do
     React.useEffectOnce do
-      Atom.reset atom
+      Class.reset atom
       mempty
     useAtom atom
 

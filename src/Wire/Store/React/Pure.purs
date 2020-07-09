@@ -1,4 +1,4 @@
-module Wire.Store.Atom.Pure where
+module Wire.React.Pure where
 
 import Prelude
 import Effect (Effect)
@@ -6,7 +6,7 @@ import Effect.Unsafe (unsafePerformEffect)
 import Wire.Event as Event
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
-import Wire.Store.Atom.Class (class Atom)
+import Wire.React.Class (class Atom)
 
 newtype Pure a
   = Pure

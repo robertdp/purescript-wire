@@ -1,4 +1,4 @@
-module Wire.Store.Atom.Async where
+module Wire.React.Async where
 
 import Prelude
 import Data.Foldable (for_)
@@ -12,7 +12,7 @@ import Effect.Unsafe (unsafePerformEffect)
 import Wire.Event as Event
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
-import Wire.Store.Atom.Class (class Atom)
+import Wire.React.Class (class Atom)
 
 newtype Async a
   = Async

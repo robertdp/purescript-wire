@@ -1,4 +1,4 @@
-module Wire.Store.Selector where
+module Wire.React.Selector where
 
 import Prelude
 import Control.Monad.Free (Free, liftF, runFreeM)
@@ -7,8 +7,8 @@ import Effect.Unsafe (unsafePerformEffect)
 import Wire.Event (Event)
 import Wire.Event as Event
 import Wire.Signal (Signal)
-import Wire.Store.Atom.Class (class Atom)
-import Wire.Store.Atom.Class as Atom
+import Wire.React.Class (class Atom)
+import Wire.React.Class as Class
 
 newtype Selector a
   = Selector
@@ -60,7 +60,7 @@ runRead :: forall a. Free Select a -> Effect a
 runRead = runFreeM case _ of Select s -> s.read
 
 select :: forall value atom. Atom atom => atom value -> Free Select value
-select = \atom -> liftF $ Select { event: (Atom.signal atom).event, read: Atom.read atom }
+select = \atom -> liftF $ Select { event: (Class.signal atom).event, read: Class.read atom }
 
 data Update next
   = Update (Effect next)
@@ -71,10 +71,10 @@ runUpdate :: forall a. Free Update a -> Effect a
 runUpdate = runFreeM case _ of Update next -> next
 
 read :: forall atom value. Atom atom => atom value -> Free Update value
-read atom = liftF $ Update $ Atom.read atom
+read atom = liftF $ Update $ Class.read atom
 
 modify :: forall atom value. Atom atom => (value -> value) -> atom value -> Free Update Unit
-modify f atom = liftF $ Update $ Atom.modify f atom
+modify f atom = liftF $ Update $ Class.modify f atom
 
 write :: forall atom value. Atom atom => value -> atom value -> Free Update Unit
 write = modify <<< const

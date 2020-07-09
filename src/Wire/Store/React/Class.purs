@@ -1,4 +1,4 @@
-module Wire.Store.Atom.Class where
+module Wire.React.Class where
 
 import Prelude
 import Effect (Effect)
