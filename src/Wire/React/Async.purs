@@ -48,7 +48,10 @@ create { initial, load, save } = do
       when inProgress do
         oldFiber <- Ref.read saveFiber
         for_ oldFiber (Aff.launchAff_ <<< Aff.killFiber (Aff.error "New save triggered, cancelling save in progress"))
-      fiber <- Aff.launchAff $ save value
+      fiber <-
+        Aff.launchAff do
+          save value
+          liftEffect $ Ref.write Nothing loadFiber
       Ref.write (Just fiber) loadFiber
   load'
   pure $ Async { initial, load: load', save: save', signal, modify }
