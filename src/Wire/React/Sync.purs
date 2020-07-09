@@ -3,7 +3,6 @@ module Wire.React.Sync where
 import Prelude
 import Effect (Effect)
 import Effect.Unsafe (unsafePerformEffect)
-import Wire.Event as Event
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
 import Wire.React.Class (class Atom)
@@ -14,6 +13,7 @@ newtype Sync a
   , load :: Effect a
   , save :: a -> Effect Unit
   , signal :: Signal a
+  , modify :: (a -> a) -> Effect Unit
   }
 
 create ::
@@ -24,8 +24,8 @@ create ::
   Effect (Sync a)
 create { load, save } = do
   initial <- load
-  signal <- Signal.create initial
-  pure $ Sync { initial, load, save, signal }
+  { signal, modify } <- Signal.create initial
+  pure $ Sync { initial, load, save, signal, modify }
 
 unsafeCreate ::
   forall a.
@@ -37,12 +37,12 @@ unsafeCreate = unsafePerformEffect <<< create
 
 instance atomSync :: Atom Sync where
   default (Sync atom) = atom.initial
-  read (Sync atom) = atom.signal.read
-  modify f (Sync atom) = do
-    atom.signal.modify f
-    atom.signal.read >>= atom.save
+  read (Sync atom) = Signal.read atom.signal
+  modify (Sync atom) f = do
+    atom.modify f
+    Signal.read atom.signal >>= atom.save
   reset (Sync atom) = do
     value <- atom.load
-    atom.signal.modify (const value)
-  subscribe notify (Sync atom) = Event.subscribe atom.signal.event notify
+    atom.modify (const value)
+  subscribe (Sync atom) = Signal.subscribe atom.signal
   signal (Sync atom) = atom.signal

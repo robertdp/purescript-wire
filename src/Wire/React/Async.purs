@@ -9,10 +9,9 @@ import Effect.Aff as Aff
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
 import Effect.Unsafe (unsafePerformEffect)
-import Wire.Event as Event
+import Wire.React.Class (class Atom)
 import Wire.Signal (Signal)
 import Wire.Signal as Signal
-import Wire.React.Class (class Atom)
 
 newtype Async a
   = Async
@@ -20,6 +19,7 @@ newtype Async a
   , load :: Effect Unit
   , save :: a -> Effect Unit
   , signal :: Signal a
+  , modify :: (a -> a) -> Effect Unit
   }
 
 create ::
@@ -30,7 +30,7 @@ create ::
   } ->
   Effect (Async a)
 create { initial, load, save } = do
-  signal <- Signal.create initial
+  { signal, modify } <- Signal.create initial
   loadFiber <- Ref.new Nothing
   saveFiber <- Ref.new Nothing
   let
@@ -40,7 +40,7 @@ create { initial, load, save } = do
         fiber <-
           Aff.launchAff do
             value <- load
-            liftEffect $ signal.modify (const value)
+            liftEffect $ modify (const value)
         Ref.write (Just fiber) loadFiber
 
     save' value = do
@@ -51,7 +51,7 @@ create { initial, load, save } = do
       fiber <- Aff.launchAff $ save value
       Ref.write (Just fiber) loadFiber
   load'
-  pure $ Async { initial, load: load', save: save', signal }
+  pure $ Async { initial, load: load', save: save', signal, modify }
 
 unsafeCreate ::
   forall a.
@@ -64,12 +64,12 @@ unsafeCreate = unsafePerformEffect <<< create
 
 instance atomAsync :: Atom Async where
   default (Async atom) = atom.initial
-  read (Async atom) = atom.signal.read
-  modify f (Async atom) = do
-    atom.signal.modify f
-    atom.signal.read >>= atom.save
+  read (Async atom) = Signal.read atom.signal
+  modify (Async atom) f = do
+    atom.modify f
+    Signal.read atom.signal >>= atom.save
   reset (Async atom) = do
-    atom.signal.modify (const atom.initial)
+    atom.modify (const atom.initial)
     atom.load
-  subscribe notify (Async atom) = Event.subscribe atom.signal.event notify
+  subscribe (Async atom) = Signal.subscribe atom.signal
   signal (Async atom) = atom.signal

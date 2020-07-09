@@ -6,7 +6,7 @@ import Control.Alternative (class Alternative, class Plus, empty)
 import Control.Apply (lift2)
 import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
 import Data.Array as Array
-import Data.Either (Either(..), either, hush)
+import Data.Either (either, hush)
 import Data.Filterable (class Compactable, class Filterable, filterMap, partitionMap)
 import Data.Foldable (class Foldable, for_, sequence_, traverse_)
 import Data.Maybe (Maybe(..), fromJust, isJust)
@@ -145,15 +145,7 @@ instance functorEvent :: Functor Event where
   map f (Event event) = Event \notify -> event (notify <<< f)
 
 instance applyEvent :: Apply Event where
-  apply eventF eventA =
-    alt (Left <$> eventF) (Right <$> eventA)
-      # fold
-          ( \{ left, right } -> case _ of
-              Left l -> { left: Just l, right }
-              Right r -> { left, right: Just r }
-          )
-          { left: Nothing, right: Nothing }
-      # filterMap (\{ left, right } -> apply left right)
+  apply = ap
 
 instance applicativeEvent :: Applicative Event where
   pure a = Event \notify -> notify a *> mempty

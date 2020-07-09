@@ -4,16 +4,16 @@ import Prelude
 import Control.Monad.Free (Free, liftF, runFreeM)
 import Effect (Effect)
 import Effect.Unsafe (unsafePerformEffect)
-import Wire.Event (Event)
-import Wire.Event as Event
-import Wire.Signal (Signal)
 import Wire.React.Class (class Atom)
 import Wire.React.Class as Class
+import Wire.Signal (Signal)
+import Wire.Signal as Signal
 
 newtype Selector a
   = Selector
   { initial :: a
   , signal :: Signal a
+  , modify :: (a -> a) -> Effect Unit
   }
 
 create ::
@@ -24,13 +24,11 @@ create ::
   Effect (Selector a)
 create { select: select', update } = do
   let
-    event = runEvent select'
+    signal = runSelect select'
 
-    read' = runRead select'
-
-    modify' f = read' >>= runUpdate <<< update <<< f
-  initial <- read'
-  pure $ Selector { initial, signal: { event, read: read', modify: modify' } }
+    modify' f = Signal.read signal >>= runUpdate <<< update <<< f
+  initial <- Signal.read signal
+  pure $ Selector { initial, signal, modify: modify' }
 
 unsafeCreate ::
   forall a.
@@ -42,25 +40,22 @@ unsafeCreate = unsafePerformEffect <<< create
 
 instance atomSelector :: Atom Selector where
   default (Selector atom) = atom.initial
-  read (Selector atom) = atom.signal.read
-  modify f (Selector atom) = atom.signal.modify f
+  read (Selector atom) = Signal.read atom.signal
+  modify (Selector atom) = atom.modify
   reset _ = mempty
-  subscribe notify (Selector atom) = Event.subscribe atom.signal.event notify
+  subscribe (Selector atom) = Signal.subscribe atom.signal
   signal (Selector atom) = atom.signal
 
 newtype Select next
-  = Select { event :: Event next, read :: Effect next }
+  = Select (Signal next)
 
 derive instance functorSelect :: Functor Select
 
-runEvent :: forall a. Free Select a -> Event a
-runEvent = runFreeM case _ of Select s -> s.event
-
-runRead :: forall a. Free Select a -> Effect a
-runRead = runFreeM case _ of Select s -> s.read
+runSelect :: Free Select ~> Signal
+runSelect = runFreeM case _ of Select s -> s
 
 select :: forall value atom. Atom atom => atom value -> Free Select value
-select = \atom -> liftF $ Select { event: (Class.signal atom).event, read: Class.read atom }
+select = \atom -> liftF $ Select $ Class.signal atom
 
 data Update next
   = Update (Effect next)
@@ -73,8 +68,8 @@ runUpdate = runFreeM case _ of Update next -> next
 read :: forall atom value. Atom atom => atom value -> Free Update value
 read atom = liftF $ Update $ Class.read atom
 
-modify :: forall atom value. Atom atom => (value -> value) -> atom value -> Free Update Unit
-modify f atom = liftF $ Update $ Class.modify f atom
+modify :: forall atom value. Atom atom => atom value -> (value -> value) -> Free Update Unit
+modify atom f = liftF $ Update $ Class.modify atom f
 
-write :: forall atom value. Atom atom => value -> atom value -> Free Update Unit
-write = modify <<< const
+write :: forall atom value. Atom atom => atom value -> value -> Free Update Unit
+write atom a = modify atom (const a)
