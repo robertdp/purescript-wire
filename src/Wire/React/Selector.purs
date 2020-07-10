@@ -54,7 +54,7 @@ derive instance functorSelect :: Functor Select
 runSelect :: Free Select ~> Signal
 runSelect = runFreeM case _ of Select s -> s
 
-select :: forall value atom. Atom atom => atom value -> Free Select value
+select :: forall atom. Atom atom => atom ~> Free Select
 select = \atom -> liftF $ Select $ Class.signal atom
 
 data Update next
@@ -62,10 +62,10 @@ data Update next
 
 derive instance functorUpdate :: Functor Update
 
-runUpdate :: forall a. Free Update a -> Effect a
+runUpdate :: Free Update ~> Effect
 runUpdate = runFreeM case _ of Update next -> next
 
-read :: forall atom value. Atom atom => atom value -> Free Update value
+read :: forall atom. Atom atom => atom ~> Free Update
 read atom = liftF $ Update $ Class.read atom
 
 modify :: forall atom value. Atom atom => atom value -> (value -> value) -> Free Update Unit
