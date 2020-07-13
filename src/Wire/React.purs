@@ -1,4 +1,4 @@
-module Wire.Store.Hooks where
+module Wire.React where
 
 import Prelude
 import Data.Newtype (class Newtype)
