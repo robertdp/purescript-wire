@@ -5,9 +5,11 @@ You can edit this file as you like.
 { name = "wire"
 , dependencies =
   [ "arrays"
-  , "avar"
   , "filterable"
-  , "profunctor"
+  , "foreign-object"
+  , "free"
+  , "freet"
+  , "react-basic-hooks"
   , "refs"
   , "unsafe-reference"
   ]
