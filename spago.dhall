@@ -5,7 +5,6 @@ You can edit this file as you like.
 { name = "wire"
 , dependencies =
   [ "aff"
-  , "arrays"
   , "filterable"
   , "foreign-object"
   , "refs"
