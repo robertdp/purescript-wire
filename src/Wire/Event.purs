@@ -3,7 +3,6 @@ module Wire.Event where
 import Prelude
 import Control.Alt (class Alt, alt)
 import Control.Alternative (class Alternative, class Plus, empty)
-import Control.Apply (lift2)
 import Control.Monad.Rec.Class (class MonadRec, Step(..), tailRecM)
 import Data.Array as Array
 import Data.Either (either, hush)
@@ -26,18 +25,18 @@ create = do
   subscribers <- Ref.new []
   let
     event =
-      Event \notify -> do
+      Event \emit -> do
         unsubscribing <- Ref.new false
         let
           isUnsubscribing = Ref.read unsubscribing
 
-          subscriber = \a -> unlessM isUnsubscribing $ notify a
-        Ref.modify_ (flip Array.snoc subscriber) subscribers
+          subscriber = \a -> unlessM isUnsubscribing do emit a
+        Ref.modify_ (_ <> [ subscriber ]) subscribers
         pure do
           Ref.write true unsubscribing
           Ref.modify_ (Array.deleteBy unsafeRefEq subscriber) subscribers
 
-    push a = Ref.read subscribers >>= traverse_ \notify -> notify a
+    push a = Ref.read subscribers >>= traverse_ \emit -> emit a
   pure { event, push }
 
 makeEvent :: forall a. ((a -> Effect Unit) -> Effect (Effect Unit)) -> Event a
@@ -47,15 +46,15 @@ subscribe :: forall a b. Event a -> (a -> Effect b) -> Effect (Effect Unit)
 subscribe (Event event) = event <<< (void <<< _)
 
 filter :: forall a. (a -> Boolean) -> Event a -> Event a
-filter pred (Event event) = Event \notify -> event \a -> if pred a then notify a else pure unit
+filter pred (Event event) = Event \emit -> event \a -> if pred a then emit a else pure unit
 
 fold :: forall a b. (b -> a -> b) -> b -> Event a -> Event b
 fold f b (Event event) =
-  Event \notify -> do
+  Event \emit -> do
     accum <- Ref.new b
     event \a -> do
       value <- Ref.modify (flip f a) accum
-      notify value
+      emit value
 
 share :: forall a. Event a -> Effect (Event a)
 share source = do
@@ -76,21 +75,21 @@ share source = do
         Ref.write Nothing cancelSource
 
     event =
-      Event \notify -> do
+      Event \emit -> do
         incrementCount
-        cancel <- subscribe shared.event notify
+        cancel <- subscribe shared.event emit
         pure $ cancel *> decrementCount
   pure event
 
 distinct :: forall a. Eq a => Event a -> Event a
 distinct (Event event) =
-  Event \notify -> do
+  Event \emit -> do
     latest <- Ref.new Nothing
     event \a -> do
       b <- Ref.read latest
       when (pure a /= b) do
         Ref.write (pure a) latest
-        notify a
+        emit a
 
 bufferUntil :: forall b a. Event b -> Event a -> Event (Array a)
 bufferUntil flush source =
@@ -105,11 +104,11 @@ bufferUntil flush source =
 
 fromFoldable :: forall a f. Foldable f => f a -> Event a
 fromFoldable xs =
-  Event \notify -> do
+  Event \emit -> do
     fiber <-
       Aff.launchAff
         $ for_ xs \x -> do
-            liftEffect $ notify x
+            liftEffect $ emit x
             Aff.delay (Milliseconds 0.0)
     pure
       $ Aff.launchAff_
@@ -117,16 +116,16 @@ fromFoldable xs =
 
 range :: Int -> Int -> Event Int
 range start end =
-  Event \notify -> do
+  Event \emit -> do
     let
       go pos
         | pos /= end = do
-          liftEffect $ notify pos
+          liftEffect $ emit pos
           Aff.delay (Milliseconds 0.0)
           pure (Loop (pos + step))
 
       go _ = do
-        liftEffect $ notify end
+        liftEffect $ emit end
         pure (Done unit)
     fiber <- Aff.launchAff $ tailRecM go start
     pure
@@ -142,22 +141,22 @@ times n
 times _ = empty
 
 instance functorEvent :: Functor Event where
-  map f (Event event) = Event \notify -> event (notify <<< f)
+  map f (Event event) = Event \emit -> event (emit <<< f)
 
 instance applyEvent :: Apply Event where
   apply = ap
 
 instance applicativeEvent :: Applicative Event where
-  pure a = Event \notify -> notify a *> mempty
+  pure a = Event \emit -> emit a *> mempty
 
 instance bindEvent :: Bind Event where
   bind (Event outer) f =
-    Event \notify -> do
+    Event \emit -> do
       cancelInner <- Ref.new Nothing
       cancelOuter <-
         outer \a -> do
           Ref.read cancelInner >>= sequence_
-          c <- subscribe (f a) notify
+          c <- subscribe (f a) emit
           Ref.write (Just c) cancelInner
       pure do
         Ref.read cancelInner >>= sequence_
@@ -181,16 +180,10 @@ instance alternativeEvent :: Alternative Event
 
 instance altEvent :: Alt Event where
   alt (Event event1) (Event event2) =
-    Event \notify -> do
-      cancel1 <- event1 notify
-      cancel2 <- event2 notify
+    Event \emit -> do
+      cancel1 <- event1 emit
+      cancel2 <- event2 emit
       pure $ cancel1 *> cancel2
-
-instance semigroupEvent :: Semigroup a => Semigroup (Event a) where
-  append = lift2 append
-
-instance monoidEvent :: Monoid a => Monoid (Event a) where
-  mempty = pure mempty
 
 instance compactableEvent :: Compactable Event where
   compact = filterMap identity
