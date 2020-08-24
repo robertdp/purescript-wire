@@ -91,9 +91,9 @@ distinct (Event event) =
         Ref.write (pure a) latest
         emit a
 
-bufferUntil :: forall b a. Event b -> Event a -> Event (Array a)
-bufferUntil flush source =
-  alt (Nothing <$ flush) (Just <$> source)
+bufferUntil :: forall b a. Event a -> Event b -> Event (Array a)
+bufferUntil source flush =
+  alt (Just <$> source) (Nothing <$ flush)
     # fold
         ( \{ buffer } -> case _ of
             Nothing -> { buffer: [], output: Just buffer }
