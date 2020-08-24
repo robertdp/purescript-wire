@@ -21,16 +21,16 @@ create init = do
     read' = Ref.read value
 
     event' =
-      Event.makeEvent \notify -> do
-        unsubscribe <- Event.subscribe inner.event notify
-        read' >>= notify
+      Event.makeEvent \emit -> do
+        unsubscribe <- Event.subscribe inner.event emit
+        read' >>= emit
         pure unsubscribe
 
     modify f = Ref.modify f value >>= inner.push
   pure { signal: Signal { event: event', read: read' }, modify }
 
 subscribe :: forall b a. Signal a -> (a -> Effect b) -> Effect (Effect Unit)
-subscribe (Signal s) notify = Event.subscribe s.event notify
+subscribe (Signal s) emit = Event.subscribe s.event emit
 
 distinct :: forall a. Eq a => Signal a -> Signal a
 distinct (Signal s) = Signal s { event = Event.distinct s.event }
