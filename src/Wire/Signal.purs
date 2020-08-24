@@ -43,13 +43,8 @@ read (Signal s) = s.read
 
 share :: forall a. Signal a -> Effect (Signal a)
 share (Signal s) = do
-  shared <- Event.create
-  value <- Ref.new =<< s.read
-  _ <-
-    Event.subscribe s.event \a -> do
-      Ref.write a value
-      shared.push a
-  pure $ Signal { event: shared.event, read: Ref.read value }
+  shared <- Event.share s.event
+  pure $ Signal s { event = shared }
 
 derive instance functorSignal :: Functor Signal
 
