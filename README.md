@@ -22,6 +22,7 @@ periodically (Milliseconds ms) = do
   { event, push } <- Event.create
   setInterval (Math.floor ms) do
     push unit
+  pure event
 ```
 
 ### Subscribing to an event
