@@ -82,7 +82,7 @@ read :: forall a. Signal a -> Effect a
 
 ### Subscribing to a signal
 
-Subscribing to a signal is identical to events, with one exception: in the current implementation a signal will push it's current value to a new subscriber immediately.
+Subscribing to a signal is identical to events, with one exception: in the current implementation a signal will push it's current value to a new subscriber immediately (kind of like a `ReplaySubject(1)`).
 
 ```purescript
 subscribe :: forall b a. Signal a -> (a -> Effect b) -> Effect (Effect Unit)
