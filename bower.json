@@ -1,0 +1,22 @@
+{
+    "name": "purescript-wire",
+    "license": [
+        "BSD-3-Clause"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/robertdp/purescript-wire.git"
+    },
+    "ignore": [
+        "**/.*",
+        "node_modules",
+        "bower_components",
+        "output"
+    ],
+    "dependencies": {
+        "purescript-aff": "^v5.1.2",
+        "purescript-filterable": "^v3.0.2",
+        "purescript-refs": "^v4.1.0",
+        "purescript-unsafe-reference": "^v3.0.1"
+    }
+}
